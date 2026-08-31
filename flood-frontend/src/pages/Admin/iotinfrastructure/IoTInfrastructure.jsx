@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 
 import {
   Card,
@@ -10,6 +11,12 @@ import {
   Space,
   Tabs,
   Button,
+  Modal,
+  Descriptions,
+  Spin,
+  Alert,
+  Empty,
+  message,
 } from "antd";
 
 import {
@@ -22,96 +29,247 @@ import {
   RightOutlined,
 } from "@ant-design/icons";
 
+import { useDispatch, useSelector } from "react-redux";
+
+import {
+  fetchNodes,
+  fetchNodeById,
+  clearSelectedNode,
+  clearNodeError,
+  selectNodes,
+  selectSelectedNode,
+  selectNodesLoading,
+  selectNodeDetailsLoading,
+  selectNodesError,
+  selectNodeDetailsError,
+} from "../../../store/slices/nodeSlice";
+
 import ComponentLaibrary from "./ComponentLaibrary";
 
 const { Title, Text } = Typography;
 
+// =========================================================
+// COMPONENT
+// =========================================================
+
 const Iotinfrastructure = () => {
-  /*
-  |--------------------------------------------------------------------------
-  | TEMPORARY NODE DATA
-  |--------------------------------------------------------------------------
-  | Later this data will come from your backend API / database.
-  |--------------------------------------------------------------------------
-  */
+  const dispatch = useDispatch();
 
-  const devices = [
-    {
-      key: 1,
-      deviceId: "NODE-001",
-      nodeName: "Nowshera Flood Monitoring Node",
-      location: "Nowshera",
-      type: "ESP32 Sensor Node",
-      connection: "Online",
-      battery: "92%",
-      lastSeen: "10 sec ago",
-      components: 5,
-    },
+  // =======================================================
+  // REDUX STATE
+  // =======================================================
 
-    {
-      key: 2,
-      deviceId: "NODE-002",
-      nodeName: "Kabul River Monitoring Node",
-      location: "Kabul River",
-      type: "ESP32 Sensor Node",
-      connection: "Online",
-      battery: "87%",
-      lastSeen: "18 sec ago",
-      components: 5,
-    },
+  const nodes = useSelector(selectNodes);
 
-    {
-      key: 3,
-      deviceId: "NODE-003",
-      nodeName: "Charsadda Monitoring Node",
-      location: "Charsadda",
-      type: "ESP32 Sensor Node",
-      connection: "Offline",
-      battery: "41%",
-      lastSeen: "18 min ago",
-      components: 4,
-    },
+  const selectedNode = useSelector(
+    selectSelectedNode
+  );
 
-    {
-      key: 4,
-      deviceId: "GW-001",
-      nodeName: "Nowshera LoRa Gateway",
-      location: "Nowshera",
-      type: "LoRa Gateway",
-      connection: "Online",
-      battery: "100%",
-      lastSeen: "5 sec ago",
-      components: 1,
-    },
-  ];
+  const loading = useSelector(
+    selectNodesLoading
+  );
 
-  /*
-  |--------------------------------------------------------------------------
-  | TABLE COLUMNS
-  |--------------------------------------------------------------------------
-  */
+  const detailsLoading = useSelector(
+    selectNodeDetailsLoading
+  );
+
+  const error = useSelector(
+    selectNodesError
+  );
+
+  const detailsError = useSelector(
+    selectNodeDetailsError
+  );
+
+  // =======================================================
+  // LOCAL STATE
+  // =======================================================
+
+  const [detailsOpen, setDetailsOpen] =
+    useState(false);
+
+  // =======================================================
+  // FETCH NODES
+  // =======================================================
+
+  useEffect(() => {
+    dispatch(fetchNodes());
+  }, [dispatch]);
+
+  // =======================================================
+  // SHOW API ERROR
+  // =======================================================
+
+  useEffect(() => {
+    if (error) {
+      message.error(error);
+    }
+  }, [error]);
+
+  // =======================================================
+  // NODE DETAILS
+  // =======================================================
+
+  const openNodeDetails = (record) => {
+    setDetailsOpen(true);
+
+    dispatch(fetchNodeById(record.id));
+  };
+
+  // =======================================================
+  // CLOSE DETAILS
+  // =======================================================
+
+  const closeNodeDetails = () => {
+    setDetailsOpen(false);
+
+    dispatch(clearSelectedNode());
+  };
+
+  // =======================================================
+  // CALCULATE STATISTICS
+  // =======================================================
+
+  const totalDevices = nodes.length;
+
+  const onlineDevices = nodes.filter(
+    (node) =>
+      node.connection === "Online"
+  ).length;
+
+  const offlineDevices = nodes.filter(
+    (node) =>
+      node.connection === "Offline"
+  ).length;
+
+  const lowBatteryDevices = nodes.filter(
+    (node) => {
+      const battery = Number(
+        node.battery
+      );
+
+      return (
+        !Number.isNaN(battery) &&
+        battery < 40
+      );
+    }
+  ).length;
+
+  // =======================================================
+  // HELPERS
+  // =======================================================
+
+  const getConnectionStatus = (
+    connection
+  ) => {
+    if (!connection) {
+      return (
+        <Tag>
+          Not Connected
+        </Tag>
+      );
+    }
+
+    if (connection === "Online") {
+      return (
+        <Tag
+          icon={
+            <CheckCircleOutlined />
+          }
+          color="success"
+        >
+          Online
+        </Tag>
+      );
+    }
+
+    if (connection === "Offline") {
+      return (
+        <Tag
+          icon={
+            <DisconnectOutlined />
+          }
+          color="error"
+        >
+          Offline
+        </Tag>
+      );
+    }
+
+    return (
+      <Tag>
+        {connection}
+      </Tag>
+    );
+  };
+
+  const getBatteryStatus = (
+    battery
+  ) => {
+    if (
+      battery === null ||
+      battery === undefined ||
+      battery === ""
+    ) {
+      return (
+        <Tag>
+          Not Available
+        </Tag>
+      );
+    }
+
+    const value = Number(
+      battery
+    );
+
+    if (Number.isNaN(value)) {
+      return (
+        <Tag>
+          {battery}
+        </Tag>
+      );
+    }
+
+    return (
+      <Tag
+        color={
+          value >= 70
+            ? "success"
+            : value >= 40
+            ? "warning"
+            : "error"
+        }
+      >
+        {value}%
+      </Tag>
+    );
+  };
+
+  // =======================================================
+  // TABLE COLUMNS
+  // =======================================================
 
   const columns = [
     {
       title: "Device ID",
-      dataIndex: "deviceId",
-      key: "deviceId",
+      dataIndex: "device_id",
+      key: "device_id",
 
       render: (value) => (
         <Text strong>
-          {value}
+          {value || "N/A"}
         </Text>
       ),
     },
 
     {
       title: "Node Name",
-      dataIndex: "nodeName",
-      key: "nodeName",
+      dataIndex: "node_name",
+      key: "node_name",
 
       render: (value) => (
         <Text>
-          {value}
+          {value || "N/A"}
         </Text>
       ),
     },
@@ -125,25 +283,33 @@ const Iotinfrastructure = () => {
         <Space>
           <EnvironmentOutlined />
 
-          {location}
+          <Text>
+            {location || "Not Set"}
+          </Text>
         </Space>
       ),
     },
 
     {
       title: "Device Type",
-      dataIndex: "type",
-      key: "type",
+      dataIndex: "device_type",
+      key: "device_type",
+
+      render: (value) => (
+        <Text>
+          {value || "N/A"}
+        </Text>
+      ),
     },
 
     {
       title: "Components",
-      dataIndex: "components",
-      key: "components",
+      dataIndex: "component_count",
+      key: "component_count",
 
       render: (value) => (
         <Tag color="blue">
-          {value} Components
+          {value || 0} Components
         </Tag>
       ),
     },
@@ -153,24 +319,10 @@ const Iotinfrastructure = () => {
       dataIndex: "connection",
       key: "connection",
 
-      render: (status) => (
-        <Tag
-          icon={
-            status === "Online" ? (
-              <CheckCircleOutlined />
-            ) : (
-              <DisconnectOutlined />
-            )
-          }
-          color={
-            status === "Online"
-              ? "success"
-              : "error"
-          }
-        >
-          {status}
-        </Tag>
-      ),
+      render: (status) =>
+        getConnectionStatus(
+          status
+        ),
     },
 
     {
@@ -178,39 +330,37 @@ const Iotinfrastructure = () => {
       dataIndex: "battery",
       key: "battery",
 
-      render: (battery) => {
-        const value = parseInt(battery, 10);
-
-        return (
-          <Tag
-            color={
-              value >= 70
-                ? "success"
-                : value >= 40
-                ? "warning"
-                : "error"
-            }
-          >
-            {battery}
-          </Tag>
-        );
-      },
+      render: (battery) =>
+        getBatteryStatus(
+          battery
+        ),
     },
 
     {
       title: "Last Seen",
-      dataIndex: "lastSeen",
-      key: "lastSeen",
+      dataIndex: "last_seen",
+      key: "last_seen",
+
+      render: (value) => (
+        <Text>
+          {value || "Never"}
+        </Text>
+      ),
     },
 
     {
       title: "Action",
       key: "action",
 
-      render: () => (
+      render: (_, record) => (
         <Button
           type="link"
           icon={<RightOutlined />}
+          onClick={() =>
+            openNodeDetails(
+              record
+            )
+          }
         >
           Details
         </Button>
@@ -218,16 +368,16 @@ const Iotinfrastructure = () => {
     },
   ];
 
-  /*
-  |--------------------------------------------------------------------------
-  | NODES TAB
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // NODES CONTENT
+  // =======================================================
 
   const nodesContent = (
     <div>
 
-      {/* PAGE HEADER */}
+      {/* ===================================================
+          PAGE HEADER
+      =================================================== */}
 
       <div
         style={{
@@ -250,8 +400,31 @@ const Iotinfrastructure = () => {
         </Text>
       </div>
 
+      {/* ===================================================
+          API ERROR
+      =================================================== */}
 
-      {/* STATISTICS */}
+      {error && (
+        <Alert
+          style={{
+            marginBottom: 24,
+          }}
+          type="error"
+          showIcon
+          message="Unable to load IoT nodes"
+          description={error}
+          closable
+          onClose={() =>
+            dispatch(
+              clearNodeError()
+            )
+          }
+        />
+      )}
+
+      {/* ===================================================
+          STATISTICS
+      =================================================== */}
 
       <Row
         gutter={[16, 16]}
@@ -270,14 +443,17 @@ const Iotinfrastructure = () => {
           <Card>
             <Statistic
               title="Total Devices"
-              value={24}
+              value={
+                loading
+                  ? 0
+                  : totalDevices
+              }
               prefix={
                 <ApiOutlined />
               }
             />
           </Card>
         </Col>
-
 
         {/* ONLINE */}
 
@@ -289,14 +465,17 @@ const Iotinfrastructure = () => {
           <Card>
             <Statistic
               title="Online Devices"
-              value={21}
+              value={
+                loading
+                  ? 0
+                  : onlineDevices
+              }
               prefix={
                 <WifiOutlined />
               }
             />
           </Card>
         </Col>
-
 
         {/* OFFLINE */}
 
@@ -308,14 +487,17 @@ const Iotinfrastructure = () => {
           <Card>
             <Statistic
               title="Offline Devices"
-              value={3}
+              value={
+                loading
+                  ? 0
+                  : offlineDevices
+              }
               prefix={
                 <DisconnectOutlined />
               }
             />
           </Card>
         </Col>
-
 
         {/* LOW BATTERY */}
 
@@ -327,7 +509,11 @@ const Iotinfrastructure = () => {
           <Card>
             <Statistic
               title="Low Battery"
-              value={2}
+              value={
+                loading
+                  ? 0
+                  : lowBatteryDevices
+              }
               prefix={
                 <ThunderboltOutlined />
               }
@@ -337,8 +523,9 @@ const Iotinfrastructure = () => {
 
       </Row>
 
-
-      {/* REGISTERED DEVICES */}
+      {/* ===================================================
+          REGISTERED DEVICES
+      =================================================== */}
 
       <Card
         title={
@@ -350,36 +537,54 @@ const Iotinfrastructure = () => {
         }
       >
 
-        <Table
-          rowKey="key"
-          columns={columns}
-          dataSource={devices}
-          pagination={{
-            pageSize: 10,
-          }}
-          scroll={{
-            x: "max-content",
-          }}
-        />
+        {loading ? (
+          <div
+            style={{
+              minHeight: 250,
+              display: "flex",
+              justifyContent:
+                "center",
+              alignItems:
+                "center",
+            }}
+          >
+            <Spin
+              size="large"
+              tip="Loading IoT nodes..."
+            />
+          </div>
+        ) : nodes.length === 0 ? (
+          <Empty
+            description="No IoT nodes registered"
+          />
+        ) : (
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={nodes}
+            pagination={{
+              pageSize: 10,
+            }}
+            scroll={{
+              x: "max-content",
+            }}
+          />
+        )}
 
       </Card>
 
     </div>
   );
 
-
-  /*
-  |--------------------------------------------------------------------------
-  | MAIN PAGE
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // MAIN PAGE
+  // =======================================================
 
   return (
     <div>
 
       <Tabs
         defaultActiveKey="nodes"
-
         items={[
           {
             key: "nodes",
@@ -392,7 +597,8 @@ const Iotinfrastructure = () => {
               </Space>
             ),
 
-            children: nodesContent,
+            children:
+              nodesContent,
           },
 
           {
@@ -412,6 +618,241 @@ const Iotinfrastructure = () => {
           },
         ]}
       />
+
+      {/* =================================================
+          NODE DETAILS MODAL
+      ================================================= */}
+
+      <Modal
+        title={
+          <Space>
+            <ApiOutlined />
+
+            Node Details
+          </Space>
+        }
+        open={detailsOpen}
+        onCancel={
+          closeNodeDetails
+        }
+        footer={null}
+        width={750}
+        destroyOnClose
+      >
+
+        {detailsLoading ? (
+          <div
+            style={{
+              minHeight: 250,
+              display: "flex",
+              justifyContent:
+                "center",
+              alignItems:
+                "center",
+            }}
+          >
+            <Spin
+              size="large"
+              tip="Loading node details..."
+            />
+          </div>
+        ) : detailsError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="Failed to load node details"
+            description={
+              detailsError
+            }
+          />
+        ) : selectedNode ? (
+          <Space
+            direction="vertical"
+            size="large"
+            style={{
+              width: "100%",
+            }}
+          >
+
+            {/* BASIC INFORMATION */}
+
+            <Descriptions
+              title="Node Information"
+              bordered
+              column={{
+                xs: 1,
+                sm: 2,
+              }}
+            >
+              <Descriptions.Item
+                label="Device ID"
+              >
+                {
+                  selectedNode.device_id ||
+                  "N/A"
+                }
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Node Name"
+              >
+                {
+                  selectedNode.node_name ||
+                  "N/A"
+                }
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Device Type"
+              >
+                {
+                  selectedNode.device_type ||
+                  "N/A"
+                }
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Location"
+              >
+                <Space>
+                  <EnvironmentOutlined />
+
+                  {
+                    selectedNode.location ||
+                    "Not Set"
+                  }
+                </Space>
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Connection"
+              >
+                {getConnectionStatus(
+                  selectedNode.connection
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Battery"
+              >
+                {getBatteryStatus(
+                  selectedNode.battery
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Last Seen"
+              >
+                {
+                  selectedNode.last_seen ||
+                  "Never"
+                }
+              </Descriptions.Item>
+
+              <Descriptions.Item
+                label="Components"
+              >
+                {
+                  selectedNode.component_count ||
+                  0
+                }
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* COMPONENTS */}
+
+            <Card
+              size="small"
+              title="Installed Components"
+            >
+
+              {selectedNode.components &&
+              selectedNode.components.length >
+                0 ? (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  dataSource={
+                    selectedNode.components
+                  }
+                  columns={[
+                    {
+                      title:
+                        "Component",
+                      dataIndex:
+                        "name",
+                      key: "name",
+                    },
+                    {
+                      title:
+                        "Category",
+                      dataIndex:
+                        "category",
+                      key: "category",
+
+                      render:
+                        (
+                          category
+                        ) => (
+                          <Tag color="blue">
+                            {
+                              category ||
+                              "Other"
+                            }
+                          </Tag>
+                        ),
+                    },
+                    {
+                      title:
+                        "Model",
+                      dataIndex:
+                        "model",
+                      key: "model",
+
+                      render:
+                        (
+                          model
+                        ) =>
+                          model ||
+                          "N/A",
+                    },
+                    {
+                      title:
+                        "Manufacturer",
+                      dataIndex:
+                        "manufacturer",
+                      key:
+                        "manufacturer",
+
+                      render:
+                        (
+                          manufacturer
+                        ) =>
+                          manufacturer ||
+                          "N/A",
+                    },
+                  ]}
+                />
+              ) : (
+                <Empty
+                  image={
+                    Empty.PRESENTED_IMAGE_SIMPLE
+                  }
+                  description="No components assigned"
+                />
+              )}
+
+            </Card>
+
+          </Space>
+        ) : (
+          <Empty
+            description="No node selected"
+          />
+        )}
+
+      </Modal>
 
     </div>
   );
