@@ -1,98 +1,59 @@
 
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
-/*
-|--------------------------------------------------------------------------
-| API BASE URL
-|--------------------------------------------------------------------------
-*/
+import {
+  getComponents,
+  createComponent,
+  updateComponent,
+  deleteComponent,
+} from "../../api/componentApi";
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000";
-
-/*
-|--------------------------------------------------------------------------
-| FETCH COMPONENTS
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// FETCH COMPONENTS
+// =========================================================
 
 export const fetchComponents = createAsyncThunk(
   "components/fetchComponents",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/components`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return rejectWithValue(
-          data.message || "Failed to fetch components"
-        );
-      }
+      const data = await getComponents();
 
       return data.components || [];
     } catch (error) {
       return rejectWithValue(
-        error.message || "Unable to connect to server"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to fetch components"
       );
     }
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| ADD COMPONENT
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// ADD COMPONENT
+// =========================================================
 
 export const addComponent = createAsyncThunk(
   "components/addComponent",
   async (componentData, { rejectWithValue }) => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/components`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(componentData),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return rejectWithValue(
-          data.message || "Failed to add component"
-        );
-      }
+      const data =
+        await createComponent(componentData);
 
       return data.component;
     } catch (error) {
       return rejectWithValue(
-        error.message || "Unable to connect to server"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to add component"
       );
     }
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| EDIT COMPONENT
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// EDIT COMPONENT
+// =========================================================
 
 export const editComponent = createAsyncThunk(
   "components/editComponent",
@@ -101,78 +62,46 @@ export const editComponent = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/components/${id}`,
-        {
-          method: "PUT",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(componentData),
-        }
+      const data = await updateComponent(
+        id,
+        componentData
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return rejectWithValue(
-          data.message || "Failed to update component"
-        );
-      }
 
       return data.component;
     } catch (error) {
       return rejectWithValue(
-        error.message || "Unable to connect to server"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to update component"
       );
     }
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| REMOVE COMPONENT
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// REMOVE COMPONENT
+// =========================================================
 
 export const removeComponent = createAsyncThunk(
   "components/removeComponent",
   async (id, { rejectWithValue }) => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/components/${id}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return rejectWithValue(
-          data.message || "Failed to delete component"
-        );
-      }
+      await deleteComponent(id);
 
       return id;
     } catch (error) {
       return rejectWithValue(
-        error.message || "Unable to connect to server"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to delete component"
       );
     }
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| INITIAL STATE
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// INITIAL STATE
+// =========================================================
 
 const initialState = {
   components: [],
@@ -180,11 +109,9 @@ const initialState = {
   error: null,
 };
 
-/*
-|--------------------------------------------------------------------------
-| SLICE
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// SLICE
+// =========================================================
 
 const componentSlice = createSlice({
   name: "components",
@@ -200,11 +127,9 @@ const componentSlice = createSlice({
   extraReducers: (builder) => {
     builder
 
-      /*
-      |----------------------------------------------------------------------
-      | FETCH
-      |----------------------------------------------------------------------
-      */
+      // =====================================================
+      // FETCH
+      // =====================================================
 
       .addCase(
         fetchComponents.pending,
@@ -232,11 +157,9 @@ const componentSlice = createSlice({
         }
       )
 
-      /*
-      |----------------------------------------------------------------------
-      | ADD
-      |----------------------------------------------------------------------
-      */
+      // =====================================================
+      // ADD
+      // =====================================================
 
       .addCase(
         addComponent.pending,
@@ -269,11 +192,9 @@ const componentSlice = createSlice({
         }
       )
 
-      /*
-      |----------------------------------------------------------------------
-      | EDIT
-      |----------------------------------------------------------------------
-      */
+      // =====================================================
+      // EDIT
+      // =====================================================
 
       .addCase(
         editComponent.pending,
@@ -315,11 +236,9 @@ const componentSlice = createSlice({
         }
       )
 
-      /*
-      |----------------------------------------------------------------------
-      | DELETE
-      |----------------------------------------------------------------------
-      */
+      // =====================================================
+      // DELETE
+      // =====================================================
 
       .addCase(
         removeComponent.pending,
@@ -354,21 +273,17 @@ const componentSlice = createSlice({
   },
 });
 
-/*
-|--------------------------------------------------------------------------
-| ACTIONS
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// ACTIONS
+// =========================================================
 
 export const {
   clearComponentError,
 } = componentSlice.actions;
 
-/*
-|--------------------------------------------------------------------------
-| SELECTORS
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// SELECTORS
+// =========================================================
 
 export const selectComponents = (state) =>
   state.components?.components || [];
@@ -376,19 +291,11 @@ export const selectComponents = (state) =>
 export const selectComponentsLoading = (state) =>
   state.components?.loading || false;
 
-/*
-|--------------------------------------------------------------------------
-| THIS WAS MISSING
-|--------------------------------------------------------------------------
-*/
-
 export const selectComponentsError = (state) =>
   state.components?.error || null;
 
-/*
-|--------------------------------------------------------------------------
-| REDUCER
-|--------------------------------------------------------------------------
-*/
+// =========================================================
+// REDUCER
+// =========================================================
 
 export default componentSlice.reducer;
