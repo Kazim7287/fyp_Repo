@@ -27,19 +27,29 @@ const generateAccessToken = (user) => {
 // =========================================================
 // COOKIE OPTIONS
 // =========================================================
+//
+// Current setup:
+//
+// Frontend:
+// http://localhost:5173
+//
+// Backend:
+// http://16.171.225.118:5000
+//
+// Since backend is currently HTTP:
+// secure MUST be false.
+//
+// =========================================================
 
 const getCookieOptions = () => {
-  const isProduction =
-    process.env.NODE_ENV === "production";
-
   return {
     httpOnly: true,
 
-    secure: isProduction,
+    // Current backend is HTTP, not HTTPS
+    secure: false,
 
-    sameSite: isProduction
-      ? "none"
-      : "lax",
+    // Allows the cookie to work with the current setup
+    sameSite: "lax",
 
     maxAge: 60 * 60 * 1000,
 
@@ -118,14 +128,13 @@ const register = async (req, res) => {
     // HASH PASSWORD
     // =====================================================
 
-    const passwordHash =
-      await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(
+      password,
+      12
+    );
 
     // =====================================================
-    // CREATE COMMON USER
-    //
-    // IMPORTANT:
-    // Public registration can NEVER create an admin.
+    // CREATE USER
     // =====================================================
 
     const result = await pool.query(
@@ -289,12 +298,6 @@ const login = async (req, res) => {
     );
 
     // =====================================================
-    // REMOVE PASSWORD HASH
-    // =====================================================
-
-    delete user.password_hash;
-
-    // =====================================================
     // RESPONSE
     // =====================================================
 
@@ -331,7 +334,9 @@ const login = async (req, res) => {
 
 const getCurrentUser = async (req, res) => {
   try {
-    // authenticate middleware should populate req.user
+    // =====================================================
+    // AUTHENTICATION CHECK
+    // =====================================================
 
     if (!req.user) {
       return res.status(401).json({
@@ -341,7 +346,7 @@ const getCurrentUser = async (req, res) => {
     }
 
     // =====================================================
-    // GET FRESH USER DATA FROM DATABASE
+    // GET FRESH USER DATA
     // =====================================================
 
     const result = await pool.query(
@@ -373,7 +378,7 @@ const getCurrentUser = async (req, res) => {
     const user = result.rows[0];
 
     // =====================================================
-    // CHECK CURRENT ACCOUNT STATUS
+    // CHECK ACCOUNT STATUS
     // =====================================================
 
     if (user.status !== "active") {
@@ -385,7 +390,7 @@ const getCurrentUser = async (req, res) => {
     }
 
     // =====================================================
-    // RETURN CURRENT USER
+    // RESPONSE
     // =====================================================
 
     return res.status(200).json({
