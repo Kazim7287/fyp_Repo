@@ -37,7 +37,7 @@ import AIForecasting from "./pages/Admin/AIForecasting";
 import Alerts from "./pages/Admin/Alerts";
 import FloodMap from "./pages/Admin/FloodMap";
 import EnvironmentalData from "./pages/Admin/EnvironmentalData";
-import IoTInfrastructure from "./pages/Admin/IoTInfrastructure";
+import IoTInfrastructure from "./pages/Admin/iotinfrastructure/IoTInfrastructure";
 import ReportsData from "./pages/Admin/ReportsData";
 import Settings from "./pages/Admin/Settings";
 import SystemLogs from "./pages/Admin/SystemLogs";
