@@ -37,7 +37,7 @@ import {
   editComponent,
   removeComponent,
   clearComponentError,
-} from "../store/slices/componentSlice";
+} from "../../../store/slices/componentSlice";
 
 const { Title, Text } = Typography;
 
