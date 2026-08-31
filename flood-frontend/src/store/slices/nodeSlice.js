@@ -1,3 +1,4 @@
+
 import {
   createSlice,
   createAsyncThunk,
@@ -64,9 +65,7 @@ export const addNode = createAsyncThunk(
 
   async (nodeData, { rejectWithValue }) => {
     try {
-      const response = await createNode(
-        nodeData
-      );
+      const response = await createNode(nodeData);
 
       return response.node;
     } catch (error) {
@@ -82,18 +81,38 @@ export const addNode = createAsyncThunk(
 // =========================================================
 // UPDATE NODE
 // =========================================================
+//
+// IMPORTANT:
+// Component sends:
+//
+// editNode({
+//   id: editingNode.id,
+//   data: payload
+// })
+//
+// Therefore this thunk uses { id, data }.
+// =========================================================
 
 export const editNode = createAsyncThunk(
   "nodes/editNode",
 
-  async (
-    { id, nodeData },
-    { rejectWithValue }
-  ) => {
+  async ({ id, data }, { rejectWithValue }) => {
     try {
+      if (!id) {
+        return rejectWithValue(
+          "Node ID is required"
+        );
+      }
+
+      if (!data || typeof data !== "object") {
+        return rejectWithValue(
+          "Node update data is required"
+        );
+      }
+
       const response = await updateNode(
         id,
-        nodeData
+        data
       );
 
       return response.node;
@@ -116,6 +135,12 @@ export const removeNode = createAsyncThunk(
 
   async (id, { rejectWithValue }) => {
     try {
+      if (!id) {
+        return rejectWithValue(
+          "Node ID is required"
+        );
+      }
+
       await deleteNode(id);
 
       return id;
@@ -161,13 +186,25 @@ const nodeSlice = createSlice({
   initialState,
 
   reducers: {
+    // -----------------------------------------------------
+    // CLEAR GENERAL ERROR
+    // -----------------------------------------------------
+
     clearNodeError: (state) => {
       state.error = null;
     },
 
+    // -----------------------------------------------------
+    // CLEAR DETAILS ERROR
+    // -----------------------------------------------------
+
     clearNodeDetailsError: (state) => {
       state.detailsError = null;
     },
+
+    // -----------------------------------------------------
+    // CLEAR SELECTED NODE
+    // -----------------------------------------------------
 
     clearSelectedNode: (state) => {
       state.selectedNode = null;
@@ -179,7 +216,7 @@ const nodeSlice = createSlice({
     builder
 
       // ===================================================
-      // FETCH NODES
+      // FETCH ALL NODES
       // ===================================================
 
       .addCase(
@@ -194,7 +231,11 @@ const nodeSlice = createSlice({
         fetchNodes.fulfilled,
         (state, action) => {
           state.loading = false;
-          state.nodes = action.payload;
+
+          state.nodes =
+            Array.isArray(action.payload)
+              ? action.payload
+              : [];
         }
       )
 
@@ -225,8 +266,9 @@ const nodeSlice = createSlice({
         fetchNodeById.fulfilled,
         (state, action) => {
           state.detailsLoading = false;
+
           state.selectedNode =
-            action.payload;
+            action.payload || null;
         }
       )
 
@@ -234,6 +276,8 @@ const nodeSlice = createSlice({
         fetchNodeById.rejected,
         (state, action) => {
           state.detailsLoading = false;
+
+          state.selectedNode = null;
 
           state.detailsError =
             action.payload ||
@@ -258,9 +302,11 @@ const nodeSlice = createSlice({
         (state, action) => {
           state.saving = false;
 
-          state.nodes.unshift(
-            action.payload
-          );
+          if (action.payload) {
+            state.nodes.unshift(
+              action.payload
+            );
+          }
         }
       )
 
@@ -295,6 +341,11 @@ const nodeSlice = createSlice({
           const updatedNode =
             action.payload;
 
+          if (!updatedNode) {
+            return;
+          }
+
+          // Find node in list
           const index =
             state.nodes.findIndex(
               (node) =>
@@ -302,11 +353,14 @@ const nodeSlice = createSlice({
                 updatedNode.id
             );
 
+          // Replace updated node
           if (index !== -1) {
             state.nodes[index] =
               updatedNode;
           }
 
+          // Update selected node if
+          // currently selected
           if (
             state.selectedNode?.id ===
             updatedNode.id
@@ -345,16 +399,20 @@ const nodeSlice = createSlice({
         (state, action) => {
           state.deleting = false;
 
+          const deletedId =
+            action.payload;
+
           state.nodes =
             state.nodes.filter(
               (node) =>
-                node.id !==
-                action.payload
+                node.id !== deletedId
             );
 
+          // Clear selected node if
+          // deleted node was selected
           if (
             state.selectedNode?.id ===
-            action.payload
+            deletedId
           ) {
             state.selectedNode = null;
           }
@@ -391,32 +449,31 @@ export const {
 export const selectNodes = (state) =>
   state.nodes.nodes;
 
-export const selectSelectedNode = (
-  state
-) => state.nodes.selectedNode;
+export const selectSelectedNode = (state) =>
+  state.nodes.selectedNode;
 
-export const selectNodesLoading = (
-  state
-) => state.nodes.loading;
+export const selectNodesLoading = (state) =>
+  state.nodes.loading;
 
 export const selectNodeDetailsLoading = (
   state
 ) => state.nodes.detailsLoading;
 
-export const selectNodesSaving = (
-  state
-) => state.nodes.saving;
+export const selectNodesSaving = (state) =>
+  state.nodes.saving;
 
-export const selectNodesDeleting = (
-  state
-) => state.nodes.deleting;
+export const selectNodesDeleting = (state) =>
+  state.nodes.deleting;
 
-export const selectNodesError = (
-  state
-) => state.nodes.error;
+export const selectNodesError = (state) =>
+  state.nodes.error;
 
 export const selectNodeDetailsError = (
   state
 ) => state.nodes.detailsError;
+
+// =========================================================
+// REDUCER
+// =========================================================
 
 export default nodeSlice.reducer;
