@@ -1,15 +1,17 @@
 const express = require("express");
 
-const authenticate =
-  require("../middleware/authenticate");
+const {
+  authenticate,
+  authorize,
+} = require("../middleware/auth.middleware");
 
-const authorize =
-  require("../middleware/authorize");
-
-const sensorController =
-  require("../controllers/sensor.controller");
+const sensorController = require("../controllers/sensor.controller");
 
 const router = express.Router();
+
+// =========================================================
+// CREATE SENSOR DATA
+// =========================================================
 
 router.post(
   "/",
@@ -17,5 +19,9 @@ router.post(
   authorize("admin", "operator"),
   sensorController.createSensorData
 );
+
+// =========================================================
+// EXPORT
+// =========================================================
 
 module.exports = router;

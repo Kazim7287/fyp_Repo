@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Card,
@@ -16,6 +16,7 @@ import {
   Popconfirm,
   message,
   Empty,
+  Alert,
 } from "antd";
 
 import {
@@ -28,82 +29,80 @@ import {
   WifiOutlined,
 } from "@ant-design/icons";
 
+import { useDispatch, useSelector } from "react-redux";
+
+import {
+  fetchComponents,
+  addComponent,
+  editComponent,
+  removeComponent,
+  clearComponentError,
+} from "../store/slices/componentSlice";
+
 const { Title, Text } = Typography;
 
 const ComponentLibrary = () => {
-  const [components, setComponents] = useState([
-    {
-      key: 1,
-      name: "ESP32-WROOM-32",
-      category: "Microcontroller",
-      model: "ESP32-WROOM-32",
-      manufacturer: "Espressif",
-      interface: "GPIO / Wi-Fi / Bluetooth",
-      voltage: "3.3V",
-      quantity: 5,
-    },
-    {
-      key: 2,
-      name: "SX1278 LoRa Module",
-      category: "Communication",
-      model: "SX1278",
-      manufacturer: "Generic",
-      interface: "SPI",
-      voltage: "3.3V",
-      quantity: 5,
-    },
-    {
-      key: 3,
-      name: "HC-SR04",
-      category: "Water Level",
-      model: "HC-SR04",
-      manufacturer: "Generic",
-      interface: "GPIO",
-      voltage: "5V",
-      quantity: 3,
-    },
-    {
-      key: 4,
-      name: "DHT22",
-      category: "Temperature / Humidity",
-      model: "DHT22",
-      manufacturer: "Generic",
-      interface: "Digital",
-      voltage: "3.3V - 5V",
-      quantity: 4,
-    },
-    {
-      key: 5,
-      name: "Tipping Bucket Rain Gauge",
-      category: "Rainfall",
-      model: "Pulse Type",
-      manufacturer: "Generic",
-      interface: "Pulse",
-      voltage: "5V",
-      quantity: 3,
-    },
-    {
-      key: 6,
-      name: "Water Flow Sensor",
-      category: "Water Flow",
-      model: "YF-S201",
-      manufacturer: "Generic",
-      interface: "Pulse",
-      voltage: "5V",
-      quantity: 3,
-    },
-  ]);
+  // =========================================================
+  // REDUX
+  // =========================================================
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingComponent, setEditingComponent] = useState(null);
+  const dispatch = useDispatch();
+
+  const {
+    components,
+    loading,
+    actionLoading,
+    error,
+  } = useSelector(
+    (state) => state.components
+  );
+
+  // =========================================================
+  // LOCAL UI STATE
+  // =========================================================
+
+  const [modalOpen, setModalOpen] =
+    useState(false);
+
+  const [editingComponent, setEditingComponent] =
+    useState(null);
 
   const [form] = Form.useForm();
 
+  // =========================================================
+  // FETCH COMPONENTS ON PAGE LOAD
+  // =========================================================
+
+  useEffect(() => {
+    dispatch(fetchComponents());
+  }, [dispatch]);
+
+  // =========================================================
+  // SHOW REDUX ERROR
+  // =========================================================
+
+  useEffect(() => {
+    if (error) {
+      message.error(error);
+      dispatch(clearComponentError());
+    }
+  }, [error, dispatch]);
+
+  // =========================================================
+  // OPEN ADD MODAL
+  // =========================================================
+
   const openAddModal = () => {
     setEditingComponent(null);
+
     form.resetFields();
+
     setModalOpen(true);
   };
+
+  // =========================================================
+  // OPEN EDIT MODAL
+  // =========================================================
 
   const openEditModal = (record) => {
     setEditingComponent(record);
@@ -121,51 +120,94 @@ const ComponentLibrary = () => {
     setModalOpen(true);
   };
 
+  // =========================================================
+  // CLOSE MODAL
+  // =========================================================
+
+  const closeModal = () => {
+    setModalOpen(false);
+
+    setEditingComponent(null);
+
+    form.resetFields();
+  };
+
+  // =========================================================
+  // ADD / UPDATE COMPONENT
+  // =========================================================
+
   const handleSubmit = async () => {
     try {
-      const values = await form.validateFields();
+      const values =
+        await form.validateFields();
+
+      // =====================================================
+      // UPDATE
+      // =====================================================
 
       if (editingComponent) {
-        setComponents((prev) =>
-          prev.map((item) =>
-            item.key === editingComponent.key
-              ? {
-                  ...item,
-                  ...values,
-                }
-              : item
-          )
+        await dispatch(
+          editComponent({
+            id: editingComponent.id,
+            componentData: values,
+          })
+        ).unwrap();
+
+        message.success(
+          "Component updated successfully"
         );
-
-        message.success("Component updated successfully");
-      } else {
-        const newComponent = {
-          key: Date.now(),
-          ...values,
-        };
-
-        setComponents((prev) => [
-          ...prev,
-          newComponent,
-        ]);
-
-        message.success("Component added successfully");
       }
 
-      setModalOpen(false);
-      form.resetFields();
+      // =====================================================
+      // CREATE
+      // =====================================================
+
+      else {
+        await dispatch(
+          addComponent(values)
+        ).unwrap();
+
+        message.success(
+          "Component added successfully"
+        );
+      }
+
+      closeModal();
     } catch (error) {
-      // Form validation error
+      // Ant Design validation errors
+      // are objects and don't need a message.
+
+      if (typeof error === "string") {
+        message.error(error);
+      }
     }
   };
 
-  const deleteComponent = (key) => {
-    setComponents((prev) =>
-      prev.filter((item) => item.key !== key)
-    );
+  // =========================================================
+  // DELETE COMPONENT
+  // =========================================================
 
-    message.success("Component deleted successfully");
+  const handleDeleteComponent = async (id) => {
+    try {
+      await dispatch(
+        removeComponent(id)
+      ).unwrap();
+
+      message.success(
+        "Component deleted successfully"
+      );
+    } catch (error) {
+      message.error(
+        typeof error === "string"
+          ? error
+          : "Failed to delete component"
+      );
+    }
   };
+
+  // =========================================================
+  // CATEGORY ICON
+  // =========================================================
 
   const getCategoryIcon = (category) => {
     if (category === "Microcontroller") {
@@ -183,16 +225,25 @@ const ComponentLibrary = () => {
     return <RadarChartOutlined />;
   };
 
+  // =========================================================
+  // TABLE COLUMNS
+  // =========================================================
+
   const columns = [
     {
       title: "Component",
       dataIndex: "name",
       key: "name",
+
       render: (value, record) => (
         <Space>
-          {getCategoryIcon(record.category)}
+          {getCategoryIcon(
+            record.category
+          )}
 
-          <Text strong>{value}</Text>
+          <Text strong>
+            {value}
+          </Text>
         </Space>
       ),
     },
@@ -201,6 +252,7 @@ const ComponentLibrary = () => {
       title: "Category",
       dataIndex: "category",
       key: "category",
+
       render: (category) => (
         <Tag color="blue">
           {category}
@@ -212,39 +264,52 @@ const ComponentLibrary = () => {
       title: "Model",
       dataIndex: "model",
       key: "model",
+
+      render: (model) =>
+        model || "-",
     },
 
     {
       title: "Manufacturer",
       dataIndex: "manufacturer",
       key: "manufacturer",
+
+      render: (manufacturer) =>
+        manufacturer || "-",
     },
 
     {
       title: "Interface",
       dataIndex: "interface",
       key: "interface",
+
+      render: (interfaceValue) =>
+        interfaceValue || "-",
     },
 
     {
       title: "Voltage",
       dataIndex: "voltage",
       key: "voltage",
+
+      render: (voltage) =>
+        voltage || "-",
     },
 
     {
       title: "Available",
       dataIndex: "quantity",
       key: "quantity",
+
       render: (quantity) => (
         <Tag
           color={
-            quantity > 0
+            Number(quantity) > 0
               ? "success"
               : "error"
           }
         >
-          {quantity}
+          {quantity ?? 0}
         </Tag>
       ),
     },
@@ -253,29 +318,43 @@ const ComponentLibrary = () => {
       title: "Actions",
       key: "actions",
       fixed: "right",
+
       render: (_, record) => (
         <Space>
+          {/* EDIT */}
+
           <Button
             type="text"
-            icon={<EditOutlined />}
+            icon={
+              <EditOutlined />
+            }
             onClick={() =>
               openEditModal(record)
             }
           />
 
+          {/* DELETE */}
+
           <Popconfirm
             title="Delete component?"
-            description="This component will be removed from the library."
+            description="This component will be permanently removed from the library."
             okText="Delete"
             cancelText="Cancel"
+            okButtonProps={{
+              danger: true,
+            }}
             onConfirm={() =>
-              deleteComponent(record.key)
+              handleDeleteComponent(
+                record.id
+              )
             }
           >
             <Button
               type="text"
               danger
-              icon={<DeleteOutlined />}
+              icon={
+                <DeleteOutlined />
+              }
             />
           </Popconfirm>
         </Space>
@@ -283,16 +362,24 @@ const ComponentLibrary = () => {
     },
   ];
 
+  // =========================================================
+  // RENDER
+  // =========================================================
+
   return (
     <div>
-      {/* HEADER */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <div
         style={{
           marginBottom: 24,
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
+          justifyContent:
+            "space-between",
+          alignItems:
+            "flex-start",
           gap: 16,
           flexWrap: "wrap",
         }}
@@ -300,40 +387,86 @@ const ComponentLibrary = () => {
         <div>
           <Title
             level={3}
-            style={{ marginBottom: 4 }}
+            style={{
+              marginBottom: 4,
+            }}
           >
             Component Library
           </Title>
 
           <Text type="secondary">
-            Manage the hardware components and sensors
-            available for deployment on IoT nodes.
+            Manage the hardware
+            components and sensors
+            available for deployment
+            on IoT nodes.
           </Text>
         </div>
 
         <Button
           type="primary"
-          icon={<PlusOutlined />}
-          onClick={openAddModal}
+          icon={
+            <PlusOutlined />
+          }
+          onClick={
+            openAddModal
+          }
         >
           Add Component
         </Button>
       </div>
 
-      {/* COMPONENT TABLE */}
+      {/* =====================================================
+          ERROR
+      ===================================================== */}
+
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          message={error}
+          style={{
+            marginBottom: 16,
+          }}
+          onClose={() =>
+            dispatch(
+              clearComponentError()
+            )
+          }
+        />
+      )}
+
+      {/* =====================================================
+          COMPONENT TABLE
+      ===================================================== */}
 
       <Card>
         {components.length > 0 ? (
           <Table
-            rowKey="key"
+            rowKey="id"
             columns={columns}
             dataSource={components}
+            loading={loading}
             pagination={{
               pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [
+                "10",
+                "20",
+                "50",
+              ],
             }}
             scroll={{
               x: "max-content",
             }}
+          />
+        ) : loading ? (
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={[]}
+            loading={true}
+            pagination={false}
           />
         ) : (
           <Empty
@@ -342,7 +475,9 @@ const ComponentLibrary = () => {
         )}
       </Card>
 
-      {/* ADD / EDIT MODAL */}
+      {/* =====================================================
+          ADD / EDIT MODAL
+      ===================================================== */}
 
       <Modal
         title={
@@ -351,15 +486,15 @@ const ComponentLibrary = () => {
             : "Add Component"
         }
         open={modalOpen}
-        onCancel={() => {
-          setModalOpen(false);
-          form.resetFields();
-        }}
+        onCancel={closeModal}
         onOk={handleSubmit}
         okText={
           editingComponent
             ? "Update Component"
             : "Add Component"
+        }
+        confirmLoading={
+          actionLoading
         }
         width={650}
         destroyOnClose
@@ -367,7 +502,10 @@ const ComponentLibrary = () => {
         <Form
           form={form}
           layout="vertical"
+          autoComplete="off"
         >
+          {/* COMPONENT NAME */}
+
           <Form.Item
             label="Component Name"
             name="name"
@@ -384,6 +522,8 @@ const ComponentLibrary = () => {
             />
           </Form.Item>
 
+          {/* CATEGORY */}
+
           <Form.Item
             label="Category"
             name="category"
@@ -399,29 +539,40 @@ const ComponentLibrary = () => {
               placeholder="Select category"
               options={[
                 {
-                  value: "Microcontroller",
-                  label: "Microcontroller",
+                  value:
+                    "Microcontroller",
+                  label:
+                    "Microcontroller",
                 },
                 {
-                  value: "Water Level",
-                  label: "Water Level Sensor",
+                  value:
+                    "Water Level",
+                  label:
+                    "Water Level Sensor",
                 },
                 {
-                  value: "Rainfall",
-                  label: "Rainfall Sensor",
+                  value:
+                    "Rainfall",
+                  label:
+                    "Rainfall Sensor",
                 },
                 {
-                  value: "Temperature / Humidity",
+                  value:
+                    "Temperature / Humidity",
                   label:
                     "Temperature / Humidity",
                 },
                 {
-                  value: "Water Flow",
-                  label: "Water Flow Sensor",
+                  value:
+                    "Water Flow",
+                  label:
+                    "Water Flow Sensor",
                 },
                 {
-                  value: "Communication",
-                  label: "Communication",
+                  value:
+                    "Communication",
+                  label:
+                    "Communication",
                 },
                 {
                   value: "Power",
@@ -435,19 +586,29 @@ const ComponentLibrary = () => {
             />
           </Form.Item>
 
+          {/* MODEL */}
+
           <Form.Item
             label="Model"
             name="model"
           >
-            <Input placeholder="e.g. YF-S201" />
+            <Input
+              placeholder="e.g. YF-S201"
+            />
           </Form.Item>
+
+          {/* MANUFACTURER */}
 
           <Form.Item
             label="Manufacturer"
             name="manufacturer"
           >
-            <Input placeholder="e.g. Espressif" />
+            <Input
+              placeholder="e.g. Espressif"
+            />
           </Form.Item>
+
+          {/* INTERFACE */}
 
           <Form.Item
             label="Interface"
@@ -458,12 +619,18 @@ const ComponentLibrary = () => {
             />
           </Form.Item>
 
+          {/* VOLTAGE */}
+
           <Form.Item
             label="Voltage"
             name="voltage"
           >
-            <Input placeholder="e.g. 3.3V" />
+            <Input
+              placeholder="e.g. 3.3V"
+            />
           </Form.Item>
+
+          {/* QUANTITY */}
 
           <Form.Item
             label="Available Quantity"
@@ -478,7 +645,11 @@ const ComponentLibrary = () => {
           >
             <InputNumber
               min={0}
-              style={{ width: "100%" }}
+              precision={0}
+              style={{
+                width: "100%",
+              }}
+              placeholder="e.g. 5"
             />
           </Form.Item>
         </Form>

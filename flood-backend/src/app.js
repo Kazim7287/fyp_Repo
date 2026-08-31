@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -6,45 +7,68 @@ require("dotenv").config();
 
 const pool = require("./config/db");
 
-// Routes
+// =========================================================
+// ROUTES
+// =========================================================
+
 const authRoutes = require("./routes/auth.routes");
 const usersRoutes = require("./routes/users.routes");
 const adminRoutes = require("./routes/admin.routes");
+const sensorRoutes = require("./routes/sensor.routes");
+const componentRoutes = require("./routes/component.routes");
 
 const app = express();
 
 // =========================================================
-// CORS
+// CORS CONFIGURATION
 // =========================================================
- 
+
 const allowedOrigins = [
+  // Local development
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
- "http://16.171.225.118",
-"http://floodforecast.duckdns.org",
+
+  // Production frontend
+  "http://16.171.225.118",
+  "http://13.61.106.220",
+  "http://floodforecast.duckdns.org",
 ];
+
+// Allow FRONTEND_URL from .env as well
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without Origin
-      // Example: curl, Postman, server-to-server
+      // ---------------------------------------------------
+      // Requests without Origin
+      // ---------------------------------------------------
+      // Examples:
+      // curl
+      // Postman
+      // server-to-server requests
+      // ---------------------------------------------------
+
       if (!origin) {
         return callback(null, true);
       }
+
+      // ---------------------------------------------------
+      // Allowed origins
+      // ---------------------------------------------------
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      // Production frontend URL
-      if (
-        process.env.FRONTEND_URL &&
-        origin === process.env.FRONTEND_URL
-      ) {
-        return callback(null, true);
-      }
+      // ---------------------------------------------------
+      // Block unknown origins
+      // ---------------------------------------------------
+
+      console.error(`❌ CORS blocked origin: ${origin}`);
 
       return callback(
         new Error(`CORS blocked origin: ${origin}`)
@@ -52,6 +76,21 @@ app.use(
     },
 
     credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+    ],
   })
 );
 
@@ -132,6 +171,18 @@ app.use("/api/users", usersRoutes);
 app.use("/api/admin", adminRoutes);
 
 // =========================================================
+// SENSOR ROUTES
+// =========================================================
+
+app.use("/api/sensors", sensorRoutes);
+
+// =========================================================
+// COMPONENT LIBRARY ROUTES
+// =========================================================
+
+app.use("/api/components", componentRoutes);
+
+// =========================================================
 // 404 HANDLER
 // =========================================================
 
@@ -149,9 +200,19 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error("❌ Server error:", err);
 
+  // CORS errors
+  if (err.message?.startsWith("CORS blocked origin")) {
+    return res.status(403).json({
+      success: false,
+      message: err.message,
+    });
+  }
+
+  // General errors
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Internal server error",
+    message:
+      err.message || "Internal server error",
   });
 });
 
