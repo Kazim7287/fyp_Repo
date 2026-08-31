@@ -73,7 +73,7 @@ const Iotinfrastructure = () => {
   const [form] = Form.useForm();
 
   // =========================================================
-  // NODE REDUX STATE
+  // NODE STATE
   // =========================================================
 
   const nodes = useSelector(selectNodes) || [];
@@ -93,10 +93,11 @@ const Iotinfrastructure = () => {
   );
 
   // =========================================================
-  // COMPONENT REDUX STATE
+  // COMPONENT STATE
   // =========================================================
 
-  const components = useSelector(selectComponents) || [];
+  const components =
+    useSelector(selectComponents) || [];
 
   const componentsLoading = useSelector(
     selectComponentsLoading
@@ -123,7 +124,7 @@ const Iotinfrastructure = () => {
     useState(false);
 
   // =========================================================
-  // INITIAL DATA
+  // INITIAL LOAD
   // =========================================================
 
   useEffect(() => {
@@ -132,7 +133,7 @@ const Iotinfrastructure = () => {
   }, [dispatch]);
 
   // =========================================================
-  // API ERROR
+  // ERROR MESSAGE
   // =========================================================
 
   useEffect(() => {
@@ -149,31 +150,29 @@ const Iotinfrastructure = () => {
 
   const onlineDevices = nodes.filter(
     (node) =>
-      String(node.connection).toLowerCase() ===
+      String(node.connection || "").toLowerCase() ===
       "online"
   ).length;
 
   const offlineDevices = nodes.filter(
     (node) =>
-      String(node.connection).toLowerCase() ===
+      String(node.connection || "").toLowerCase() ===
       "offline"
   ).length;
 
-  const lowBatteryDevices = nodes.filter(
-    (node) => {
-      if (
-        node.battery === null ||
-        node.battery === undefined ||
-        node.battery === ""
-      ) {
-        return false;
-      }
-
-      const battery = Number(node.battery);
-
-      return !Number.isNaN(battery) && battery < 40;
+  const lowBatteryDevices = nodes.filter((node) => {
+    if (
+      node.battery === null ||
+      node.battery === undefined ||
+      node.battery === ""
+    ) {
+      return false;
     }
-  ).length;
+
+    const battery = Number(node.battery);
+
+    return !Number.isNaN(battery) && battery < 40;
+  }).length;
 
   // =========================================================
   // OPEN ADD MODAL
@@ -196,19 +195,26 @@ const Iotinfrastructure = () => {
   // OPEN EDIT MODAL
   // =========================================================
 
-  const openEditModal = async (record) => {
+  const openEditModal = (record) => {
     setEditingNode(record);
 
     form.setFieldsValue({
-      device_id: record.device_id,
-      node_name: record.node_name,
-      device_type: record.device_type,
-      location: record.location || undefined,
+      device_id: record.device_id || "",
+      node_name: record.node_name || "",
+      device_type:
+        record.device_type || "ESP32 Sensor Node",
+
+      location:
+        record.location_name ||
+        record.location ||
+        "",
+
       latitude:
         record.latitude !== null &&
         record.latitude !== undefined
           ? Number(record.latitude)
           : undefined,
+
       longitude:
         record.longitude !== null &&
         record.longitude !== undefined
@@ -225,9 +231,7 @@ const Iotinfrastructure = () => {
 
   const closeNodeModal = () => {
     setNodeModalOpen(false);
-
     setEditingNode(null);
-
     form.resetFields();
   };
 
@@ -242,24 +246,34 @@ const Iotinfrastructure = () => {
 
       setSubmitting(true);
 
+      // IMPORTANT:
+      // These names MUST match the backend controller.
       const payload = {
-        device_id: values.device_id.trim(),
-        node_name: values.node_name.trim(),
-        device_type:
+        deviceId: values.device_id.trim(),
+
+        nodeName: values.node_name.trim(),
+
+        deviceType:
           values.device_type ||
           "ESP32 Sensor Node",
 
-        location:
-          values.location || null,
+        locationName:
+          values.location?.trim() || null,
 
         latitude:
-          values.latitude ??
-          null,
+          values.latitude !== undefined
+            ? Number(values.latitude)
+            : null,
 
         longitude:
-          values.longitude ??
-          null,
+          values.longitude !== undefined
+            ? Number(values.longitude)
+            : null,
       };
+
+      // =====================================================
+      // UPDATE
+      // =====================================================
 
       if (editingNode) {
         await dispatch(
@@ -272,12 +286,19 @@ const Iotinfrastructure = () => {
         message.success(
           "Node updated successfully"
         );
-      } else {
+      }
+
+      // =====================================================
+      // CREATE
+      // =====================================================
+
+      else {
         payload.components =
           (values.components || []).map(
             (item) => ({
-              component_id:
+              componentId:
                 Number(item.component_id),
+
               quantity:
                 Number(item.quantity || 1),
             })
@@ -294,11 +315,17 @@ const Iotinfrastructure = () => {
 
       closeNodeModal();
 
-      dispatch(fetchNodes());
+      await dispatch(fetchNodes()).unwrap();
     } catch (error) {
-      if (error?.message) {
-        message.error(error.message);
-      }
+      console.error(
+        "Node submit error:",
+        error
+      );
+
+      message.error(
+        error?.message ||
+          "Failed to save node"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -318,8 +345,13 @@ const Iotinfrastructure = () => {
         "Node deleted successfully"
       );
 
-      dispatch(fetchNodes());
+      await dispatch(fetchNodes()).unwrap();
     } catch (error) {
+      console.error(
+        "Delete node error:",
+        error
+      );
+
       message.error(
         error?.message ||
           "Failed to delete node"
@@ -346,16 +378,16 @@ const Iotinfrastructure = () => {
   const closeNodeDetails = () => {
     setDetailsOpen(false);
 
-    dispatch(clearSelectedNode());
+    dispatch(
+      clearSelectedNode()
+    );
   };
 
   // =========================================================
   // CONNECTION STATUS
   // =========================================================
 
-  const renderConnection = (
-    connection
-  ) => {
+  const renderConnection = (connection) => {
     if (
       connection === null ||
       connection === undefined ||
@@ -368,10 +400,10 @@ const Iotinfrastructure = () => {
       );
     }
 
-    if (
-      String(connection).toLowerCase() ===
-      "online"
-    ) {
+    const status =
+      String(connection).toLowerCase();
+
+    if (status === "online") {
       return (
         <Tag
           icon={
@@ -384,10 +416,7 @@ const Iotinfrastructure = () => {
       );
     }
 
-    if (
-      String(connection).toLowerCase() ===
-      "offline"
-    ) {
+    if (status === "offline") {
       return (
         <Tag
           icon={
@@ -408,12 +437,10 @@ const Iotinfrastructure = () => {
   };
 
   // =========================================================
-  // BATTERY
+  // BATTERY STATUS
   // =========================================================
 
-  const renderBattery = (
-    battery
-  ) => {
+  const renderBattery = (battery) => {
     if (
       battery === null ||
       battery === undefined ||
@@ -483,15 +510,16 @@ const Iotinfrastructure = () => {
 
       {
         title: "Location",
-        dataIndex: "location",
         key: "location",
 
-        render: (location) => (
+        render: (_, record) => (
           <Space>
             <EnvironmentOutlined />
 
             <Text>
-              {location || "Not Set"}
+              {record.location_name ||
+                record.location ||
+                "Not Set"}
             </Text>
           </Space>
         ),
@@ -501,18 +529,34 @@ const Iotinfrastructure = () => {
         title: "Device Type",
         dataIndex: "device_type",
         key: "device_type",
+
+        render: (value) => (
+          <Text>
+            {value || "N/A"}
+          </Text>
+        ),
       },
 
       {
         title: "Components",
-        dataIndex: "component_count",
-        key: "component_count",
+        key: "components",
 
-        render: (value) => (
-          <Tag color="blue">
-            {value || 0} Components
-          </Tag>
-        ),
+        render: (_, record) => {
+          const count =
+            Array.isArray(
+              record.components
+            )
+              ? record.components.length
+              : Number(
+                  record.component_count || 0
+                );
+
+          return (
+            <Tag color="blue">
+              {count} Components
+            </Tag>
+          );
+        },
       },
 
       {
@@ -548,7 +592,6 @@ const Iotinfrastructure = () => {
       {
         title: "Actions",
         key: "actions",
-
         fixed: "right",
 
         render: (_, record) => (
@@ -601,7 +644,7 @@ const Iotinfrastructure = () => {
         ),
       },
     ],
-    [nodes]
+    []
   );
 
   // =========================================================
@@ -664,9 +707,7 @@ const Iotinfrastructure = () => {
           type="error"
           showIcon
           message="Unable to load IoT nodes"
-          description={
-            nodeError
-          }
+          description={nodeError}
           closable
           onClose={() =>
             dispatch(
@@ -757,7 +798,7 @@ const Iotinfrastructure = () => {
         </Col>
       </Row>
 
-      {/* NODES TABLE */}
+      {/* NODES */}
 
       <Card
         title={
@@ -817,7 +858,7 @@ const Iotinfrastructure = () => {
   );
 
   // =========================================================
-  // RENDER
+  // PAGE
   // =========================================================
 
   return (
@@ -967,10 +1008,8 @@ const Iotinfrastructure = () => {
                     "Raspberry Pi Gateway",
                 },
                 {
-                  value:
-                    "Other",
-                  label:
-                    "Other",
+                  value: "Other",
+                  label: "Other",
                 },
               ]}
             />
@@ -1050,13 +1089,16 @@ const Iotinfrastructure = () => {
             </Col>
           </Row>
 
-          {/* COMPONENTS - ONLY WHEN ADDING */}
+          {/* COMPONENTS */}
 
           {!editingNode && (
             <Form.List
               name="components"
             >
-              {(fields, { add, remove }) => (
+              {(
+                fields,
+                { add, remove }
+              ) => (
                 <>
                   <div
                     style={{
@@ -1092,6 +1134,7 @@ const Iotinfrastructure = () => {
                   ) : componentsError ? (
                     <Alert
                       type="error"
+                      showIcon
                       message={
                         componentsError
                       }
@@ -1147,11 +1190,13 @@ const Iotinfrastructure = () => {
                                 ) => ({
                                   value:
                                     component.id,
-                                  label: `${component.name}${
-                                    component.model
-                                      ? ` (${component.model})`
-                                      : ""
-                                  }`,
+
+                                  label:
+                                    `${component.name}${
+                                      component.model
+                                        ? ` (${component.model})`
+                                        : ""
+                                    }`,
                                 })
                               )}
                             />
@@ -1198,8 +1243,6 @@ const Iotinfrastructure = () => {
             </Form.List>
           )}
 
-          {/* INFORMATION */}
-
           {!editingNode && (
             <Alert
               style={{
@@ -1225,7 +1268,9 @@ const Iotinfrastructure = () => {
             Node Details
           </Space>
         }
-        open={detailsOpen}
+        open={
+          detailsOpen
+        }
         onCancel={
           closeNodeDetails
         }
@@ -1266,8 +1311,6 @@ const Iotinfrastructure = () => {
               width: "100%",
             }}
           >
-            {/* BASIC INFORMATION */}
-
             <Descriptions
               title="Node Information"
               bordered
@@ -1279,22 +1322,28 @@ const Iotinfrastructure = () => {
               <Descriptions.Item
                 label="Device ID"
               >
-                {selectedNode.device_id ||
-                  "N/A"}
+                {
+                  selectedNode.device_id ||
+                  "N/A"
+                }
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Node Name"
               >
-                {selectedNode.node_name ||
-                  "N/A"}
+                {
+                  selectedNode.node_name ||
+                  "N/A"
+                }
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Device Type"
               >
-                {selectedNode.device_type ||
-                  "N/A"}
+                {
+                  selectedNode.device_type ||
+                  "N/A"
+                }
               </Descriptions.Item>
 
               <Descriptions.Item
@@ -1303,23 +1352,30 @@ const Iotinfrastructure = () => {
                 <Space>
                   <EnvironmentOutlined />
 
-                  {selectedNode.location ||
-                    "Not Set"}
+                  {
+                    selectedNode.location_name ||
+                    selectedNode.location ||
+                    "Not Set"
+                  }
                 </Space>
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Latitude"
               >
-                {selectedNode.latitude ??
-                  "Not Set"}
+                {
+                  selectedNode.latitude ??
+                  "Not Set"
+                }
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Longitude"
               >
-                {selectedNode.longitude ??
-                  "Not Set"}
+                {
+                  selectedNode.longitude ??
+                  "Not Set"
+                }
               </Descriptions.Item>
 
               <Descriptions.Item
@@ -1341,15 +1397,25 @@ const Iotinfrastructure = () => {
               <Descriptions.Item
                 label="Last Seen"
               >
-                {selectedNode.last_seen ||
-                  "Never"}
+                {
+                  selectedNode.last_seen ||
+                  "Never"
+                }
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Components"
               >
-                {selectedNode.component_count ||
-                  0}
+                {
+                  Array.isArray(
+                    selectedNode.components
+                  )
+                    ? selectedNode
+                        .components
+                        .length
+                    : selectedNode.component_count ||
+                      0
+                }
               </Descriptions.Item>
             </Descriptions>
 
@@ -1364,9 +1430,11 @@ const Iotinfrastructure = () => {
                 </Space>
               }
             >
-              {selectedNode.components &&
-              selectedNode.components.length >
-                0 ? (
+              {Array.isArray(
+                selectedNode.components
+              ) &&
+              selectedNode.components
+                .length > 0 ? (
                 <Table
                   rowKey="id"
                   size="small"
@@ -1390,15 +1458,14 @@ const Iotinfrastructure = () => {
                         "category",
                       key: "category",
 
-                      render:
-                        (
-                          category
-                        ) => (
-                          <Tag color="blue">
-                            {category ||
-                              "Other"}
-                          </Tag>
-                        ),
+                      render: (
+                        category
+                      ) => (
+                        <Tag color="blue">
+                          {category ||
+                            "Other"}
+                        </Tag>
+                      ),
                     },
 
                     {
@@ -1408,12 +1475,11 @@ const Iotinfrastructure = () => {
                         "model",
                       key: "model",
 
-                      render:
-                        (
-                          model
-                        ) =>
-                          model ||
-                          "N/A",
+                      render: (
+                        model
+                      ) =>
+                        model ||
+                        "N/A",
                     },
 
                     {
@@ -1424,12 +1490,11 @@ const Iotinfrastructure = () => {
                       key:
                         "manufacturer",
 
-                      render:
-                        (
-                          manufacturer
-                        ) =>
-                          manufacturer ||
-                          "N/A",
+                      render: (
+                        manufacturer
+                      ) =>
+                        manufacturer ||
+                        "N/A",
                     },
 
                     {
@@ -1440,15 +1505,14 @@ const Iotinfrastructure = () => {
                       key:
                         "quantity",
 
-                      render:
-                        (
-                          quantity
-                        ) => (
-                          <Tag>
-                            {quantity ||
-                              1}
-                          </Tag>
-                        ),
+                      render: (
+                        quantity
+                      ) => (
+                        <Tag>
+                          {quantity ||
+                            1}
+                        </Tag>
+                      ),
                     },
                   ]}
                 />
