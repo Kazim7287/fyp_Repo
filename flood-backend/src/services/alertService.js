@@ -39,7 +39,7 @@ const sendAlertEmail = async (alert) => {
     `);
 
     const recipientEmails = usersResult.rows.map(
-      (user) => user.email
+      (user) => user.email.trim()
     );
 
     if (recipientEmails.length === 0) {
@@ -113,13 +113,9 @@ for more information.
       SMTP2GO_API_URL,
       {
         api_key: process.env.SMTP2GO_API_KEY,
-
         sender: process.env.ALERT_EMAIL_FROM,
-
         to: recipientEmails,
-
         subject,
-
         text_body: textBody,
       },
       {
@@ -127,10 +123,53 @@ for more information.
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-
         timeout: 15000,
       }
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Check SMTP2GO Delivery Result
+    |--------------------------------------------------------------------------
+    */
+
+    const smtpData = response.data?.data;
+
+    console.log("========================================");
+    console.log("SMTP2GO RESPONSE");
+    console.log(response.data);
+    console.log("Recipients:", recipientEmails);
+    console.log("========================================");
+
+    /*
+    |--------------------------------------------------------------------------
+    | SMTP2GO Can Return HTTP 200 Even When Email Fails
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      smtpData &&
+      (
+        smtpData.failed > 0 ||
+        smtpData.succeeded === 0
+      )
+    ) {
+      console.error("========================================");
+      console.error("SMTP2GO EMAIL DELIVERY FAILED");
+      console.error(
+        "Failures:",
+        smtpData.failures
+      );
+      console.error("========================================");
+
+      return {
+        success: false,
+        message: "SMTP2GO rejected the email.",
+        recipients: recipientEmails,
+        error: smtpData.failures,
+        data: response.data,
+      };
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -140,14 +179,7 @@ for more information.
 
     console.log("========================================");
     console.log("ALERT EMAIL SENT SUCCESSFULLY");
-    console.log(
-      "Recipients:",
-      recipientEmails
-    );
-    console.log(
-      "SMTP2GO Response:",
-      response.data
-    );
+    console.log("Recipients:", recipientEmails);
     console.log("========================================");
 
     return {
