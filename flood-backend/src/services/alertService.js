@@ -818,11 +818,13 @@ const sendAlertEmail = async (alert) => {
     |--------------------------------------------------------------------------
     */
 
-    const subject =
-      `[${safeString(alert.level, "Alert").toUpperCase()}] ${
-        safeString(alert.title, "Flood Alert")
-      }`;
+   const level = safeString(alert.level, "Alert");
 
+const subject =
+  `🚨 ${level} Flood Alert | ${safeString(
+    alert.title,
+    "Flood Warning"
+  )}`;
     const textBody =
       buildTextEmail(alert);
 
