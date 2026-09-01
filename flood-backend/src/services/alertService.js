@@ -35,7 +35,7 @@ const safeString = (value, fallback = "N/A") => {
 
 
 /**
- * Escape HTML characters to prevent malformed email HTML.
+ * Escape HTML characters.
  */
 const escapeHtml = (value) => {
   return safeString(value)
@@ -61,14 +61,65 @@ const uniqueEmails = (emails) => {
 };
 
 
-/**
- * Get appropriate styling based on alert level.
- */
+/*
+|--------------------------------------------------------------------------
+| Format Alert Type
+|--------------------------------------------------------------------------
+|
+| Converts internal database values into user-friendly text.
+|
+| manual_warning
+|     -> Manual Warning
+|
+| water_level
+|     -> Water Level
+|
+| flood_prediction
+|     -> Flood Prediction
+|
+|--------------------------------------------------------------------------
+*/
+
+const formatAlertType = (alertType) => {
+  const value = safeString(
+    alertType,
+    "Flood Alert"
+  );
+
+  const alertTypeMap = {
+    manual_warning: "Manual Warning",
+    water_level: "Water Level Alert",
+    flood_prediction: "Flood Prediction",
+    rainfall: "Rainfall Alert",
+    weather: "Weather Alert",
+    sensor: "Sensor Alert",
+    system: "System Alert",
+  };
+
+  if (alertTypeMap[value]) {
+    return alertTypeMap[value];
+  }
+
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase()
+    );
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Alert Theme
+|--------------------------------------------------------------------------
+*/
+
 const getAlertTheme = (level) => {
   const normalizedLevel =
     safeString(level, "Alert").toLowerCase();
 
   switch (normalizedLevel) {
+
     case "critical":
       return {
         color: "#dc2626",
@@ -112,14 +163,10 @@ const getAlertTheme = (level) => {
 |--------------------------------------------------------------------------
 | Fetch Alert Recipients
 |--------------------------------------------------------------------------
-|
-| Recipients are automatically taken from active users
-| in the PostgreSQL users table.
-|
-|--------------------------------------------------------------------------
 */
 
 const getAlertRecipients = async () => {
+
   const result = await pool.query(`
     SELECT email
     FROM users
@@ -129,7 +176,9 @@ const getAlertRecipients = async () => {
   `);
 
   const emails = uniqueEmails(
-    result.rows.map((user) => user.email)
+    result.rows.map(
+      (user) => user.email
+    )
   );
 
   if (emails.length === 0) {
@@ -149,21 +198,26 @@ const getAlertRecipients = async () => {
 */
 
 const buildTextEmail = (alert) => {
+
+  const alertType =
+    formatAlertType(alert.alert_type);
+
   return `
 FLOOD EARLY WARNING SYSTEM
 ==============================================
 
-${safeString(alert.level, "Alert").toUpperCase()} ALERT
+${safeString(
+  alert.level,
+  "Alert"
+).toUpperCase()} ALERT
 
-${safeString(alert.title, "Flood Alert")}
+${safeString(
+  alert.title,
+  "Flood Warning"
+)}
 
-ALERT DETAILS
+ALERT INFORMATION
 ----------------------------------------------
-
-
-
-Alert Code:
-${safeString(alert.alert_code)}
 
 Level:
 ${safeString(alert.level)}
@@ -171,11 +225,11 @@ ${safeString(alert.level)}
 Status:
 ${safeString(alert.status, "Active")}
 
+Alert Type:
+${alertType}
+
 Source:
 ${safeString(alert.source)}
-
-Alert Type:
-${safeString(alert.alert_type)}
 
 Location:
 ${safeString(alert.location)}
@@ -186,7 +240,7 @@ ${safeString(alert.station)}
 Description:
 ${safeString(alert.description)}
 
-Created At:
+Time:
 ${safeString(
   alert.created_at,
   new Date().toLocaleString()
@@ -194,11 +248,11 @@ ${safeString(
 
 ----------------------------------------------
 
-This alert was generated automatically by the
-Flood Early Warning System.
+This notification was generated automatically by
+the Flood Early Warning System.
 
-Please check the monitoring dashboard for
-additional information and current conditions.
+Please check the monitoring dashboard for the
+latest flood conditions and recommendations.
 
 ==============================================
 `.trim();
@@ -212,60 +266,85 @@ additional information and current conditions.
 */
 
 const buildHtmlEmail = (alert) => {
-  const theme = getAlertTheme(alert.level);
 
-  const level = escapeHtml(
-    safeString(alert.level, "Alert")
-  );
+  const theme =
+    getAlertTheme(alert.level);
 
-  const title = escapeHtml(
-    safeString(alert.title, "Flood Alert")
-  );
+  const level =
+    escapeHtml(
+      safeString(
+        alert.level,
+        "Alert"
+      )
+    );
 
-  const description = escapeHtml(
-    safeString(alert.description)
-  );
+  const title =
+    escapeHtml(
+      safeString(
+        alert.title,
+        "Flood Warning"
+      )
+    );
 
-  const location = escapeHtml(
-    safeString(alert.location)
-  );
+  const description =
+    escapeHtml(
+      safeString(
+        alert.description
+      )
+    );
 
-  const station = escapeHtml(
-    safeString(alert.station)
-  );
+  const location =
+    escapeHtml(
+      safeString(
+        alert.location
+      )
+    );
 
-  const status = escapeHtml(
-    safeString(alert.status, "Active")
-  );
+  const station =
+    escapeHtml(
+      safeString(
+        alert.station
+      )
+    );
 
-  const source = escapeHtml(
-    safeString(alert.source)
-  );
+  const status =
+    escapeHtml(
+      safeString(
+        alert.status,
+        "Active"
+      )
+    );
 
-//   const alertId = escapeHtml(
-//     safeString(alert.id)
-//   );
+  const source =
+    escapeHtml(
+      safeString(
+        alert.source
+      )
+    );
 
-  const alertCode = escapeHtml(
-    safeString(alert.alert_code)
-  );
+  const alertType =
+    escapeHtml(
+      formatAlertType(
+        alert.alert_type
+      )
+    );
 
-  const alertType = escapeHtml(
-    safeString(alert.alert_type)
-  );
+  const createdAt =
+    escapeHtml(
+      safeString(
+        alert.created_at,
+        new Date().toLocaleString()
+      )
+    );
 
-  const createdAt = escapeHtml(
-    safeString(
-      alert.created_at,
-      new Date().toLocaleString()
-    )
-  );
 
   return `
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
+
   <meta charset="UTF-8">
 
   <meta
@@ -273,8 +352,12 @@ const buildHtmlEmail = (alert) => {
     content="width=device-width, initial-scale=1.0"
   >
 
-  <title>Flood Alert</title>
+  <title>
+    Flood Early Warning System
+  </title>
+
 </head>
+
 
 <body
   style="
@@ -286,467 +369,507 @@ const buildHtmlEmail = (alert) => {
   "
 >
 
-  <table
-    width="100%"
-    cellpadding="0"
-    cellspacing="0"
-    border="0"
-    style="background:#f1f5f9;padding:30px 15px;"
-  >
-
-    <tr>
-      <td align="center">
-
-        <!-- Main Container -->
-
-        <table
-          width="100%"
-          cellpadding="0"
-          cellspacing="0"
-          border="0"
-          style="
-            max-width:650px;
-            background:#ffffff;
-            border-radius:14px;
-            overflow:hidden;
-            box-shadow:0 4px 20px rgba(15,23,42,0.08);
-          "
-        >
-
-          <!-- Header -->
-
-          <tr>
-
-            <td
-              style="
-                background:#0f172a;
-                padding:28px 32px;
-                text-align:center;
-              "
-            >
-
-              <div
-                style="
-                  font-size:34px;
-                  margin-bottom:8px;
-                "
-              >
-                🌊
-              </div>
-
-              <div
-                style="
-                  color:#ffffff;
-                  font-size:22px;
-                  font-weight:700;
-                  letter-spacing:0.3px;
-                "
-              >
-                Flood Early Warning System
-              </div>
-
-              <div
-                style="
-                  color:#94a3b8;
-                  font-size:13px;
-                  margin-top:6px;
-                "
-              >
-                Automated Emergency Notification
-              </div>
-
-            </td>
-
-          </tr>
-
-
-          <!-- Alert Banner -->
-
-          <tr>
-
-            <td
-              style="
-                padding:24px 32px 10px 32px;
-              "
-            >
-
-              <div
-                style="
-                  background:${theme.background};
-                  border:1px solid ${theme.border};
-                  border-left:5px solid ${theme.color};
-                  border-radius:10px;
-                  padding:18px;
-                "
-              >
-
-                <div
-                  style="
-                    color:${theme.color};
-                    font-size:13px;
-                    font-weight:700;
-                    letter-spacing:0.8px;
-                  "
-                >
-                  ${theme.icon}
-                  ${theme.label}
-                </div>
-
-                <div
-                  style="
-                    color:#0f172a;
-                    font-size:22px;
-                    font-weight:700;
-                    margin-top:8px;
-                  "
-                >
-                  ${title}
-                </div>
-
-                <div
-                  style="
-                    color:#475569;
-                    font-size:14px;
-                    line-height:1.6;
-                    margin-top:10px;
-                  "
-                >
-                  ${description}
-                </div>
-
-              </div>
-
-            </td>
-
-          </tr>
-
-
-          <!-- Alert Information -->
-
-          <tr>
-
-            <td
-              style="
-                padding:20px 32px;
-              "
-            >
-
-              <div
-                style="
-                  color:#0f172a;
-                  font-size:16px;
-                  font-weight:700;
-                  margin-bottom:14px;
-                "
-              >
-                Alert Information
-              </div>
-
-
-              <table
-                width="100%"
-                cellpadding="0"
-                cellspacing="0"
-                border="0"
-                style="
-                  border:1px solid #e2e8f0;
-                  border-radius:10px;
-                  overflow:hidden;
-                "
-              >
-
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${alertId}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Alert Code
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${alertCode}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      background:#f8fafc;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Level
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:700;
-                      color:${theme.color};
-                    "
-                  >
-                    ${level}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Status
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${status}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      background:#f8fafc;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Location
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${location}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Monitoring Station
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${station}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      background:#f8fafc;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Source
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${source}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Alert Type
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${alertType}
-                  </td>
-                </tr>
-
-
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      background:#f8fafc;
-                      color:#64748b;
-                      font-size:13px;
-                    "
-                  >
-                    Time
-                  </td>
-
-                  <td
-                    style="
-                      padding:12px 14px;
-                      font-size:13px;
-                      font-weight:600;
-                    "
-                  >
-                    ${createdAt}
-                  </td>
-                </tr>
-
-              </table>
-
-            </td>
-
-          </tr>
-
-
-          <!-- Important Notice -->
-
-          <tr>
-
-            <td
-              style="
-                padding:0 32px 25px 32px;
-              "
-            >
-
-              <div
-                style="
-                  background:#f8fafc;
-                  border:1px solid #e2e8f0;
-                  border-radius:10px;
-                  padding:16px;
-                  color:#475569;
-                  font-size:13px;
-                  line-height:1.6;
-                "
-              >
-
-                <strong
-                  style="color:#0f172a;"
-                >
-                  Important:
-                </strong>
-
-                This notification was generated by the
-                Flood Early Warning System. Please review
-                the monitoring dashboard for the latest
-                flood conditions and recommended actions.
-
-              </div>
-
-            </td>
-
-          </tr>
-
-
-          <!-- Footer -->
-
-          <tr>
-
-            <td
-              style="
-                background:#0f172a;
-                padding:22px 32px;
-                text-align:center;
-              "
-            >
-
-              <div
-                style="
-                  color:#ffffff;
-                  font-size:13px;
-                  font-weight:600;
-                "
-              >
-                Flood Early Warning System
-              </div>
-
-              <div
-                style="
-                  color:#94a3b8;
-                  font-size:11px;
-                  margin-top:6px;
-                  line-height:1.5;
-                "
-              >
-                Automated notification • Please do not reply
-                to this email.
-              </div>
-
-            </td>
-
-          </tr>
-
-        </table>
-
-      </td>
-    </tr>
-
-  </table>
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    background:#f1f5f9;
+    padding:30px 15px;
+  "
+>
+
+<tr>
+
+<td align="center">
+
+
+<!-- ======================================================
+     MAIN EMAIL CONTAINER
+======================================================= -->
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    max-width:650px;
+    background:#ffffff;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 4px 20px rgba(15,23,42,0.08);
+  "
+>
+
+
+<!-- ======================================================
+     HEADER
+======================================================= -->
+
+<tr>
+
+<td
+  style="
+    background:#0f172a;
+    padding:28px 32px;
+    text-align:center;
+  "
+>
+
+<div
+  style="
+    font-size:34px;
+    margin-bottom:8px;
+  "
+>
+  🌊
+</div>
+
+
+<div
+  style="
+    color:#ffffff;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:0.3px;
+  "
+>
+  Flood Early Warning System
+</div>
+
+
+<div
+  style="
+    color:#94a3b8;
+    font-size:13px;
+    margin-top:6px;
+  "
+>
+  Automated Emergency Notification
+</div>
+
+</td>
+
+</tr>
+
+
+<!-- ======================================================
+     ALERT BANNER
+======================================================= -->
+
+<tr>
+
+<td
+  style="
+    padding:24px 32px 10px 32px;
+  "
+>
+
+<div
+  style="
+    background:${theme.background};
+    border:1px solid ${theme.border};
+    border-left:5px solid ${theme.color};
+    border-radius:10px;
+    padding:18px;
+  "
+>
+
+
+<div
+  style="
+    color:${theme.color};
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:0.8px;
+  "
+>
+  ${theme.icon}
+  ${theme.label}
+</div>
+
+
+<div
+  style="
+    color:#0f172a;
+    font-size:22px;
+    font-weight:700;
+    margin-top:8px;
+  "
+>
+  ${title}
+</div>
+
+
+<div
+  style="
+    color:#475569;
+    font-size:14px;
+    line-height:1.6;
+    margin-top:10px;
+  "
+>
+  ${description}
+</div>
+
+
+</div>
+
+</td>
+
+</tr>
+
+
+<!-- ======================================================
+     ALERT INFORMATION
+======================================================= -->
+
+<tr>
+
+<td
+  style="
+    padding:20px 32px;
+  "
+>
+
+
+<div
+  style="
+    color:#0f172a;
+    font-size:16px;
+    font-weight:700;
+    margin-bottom:14px;
+  "
+>
+  Alert Information
+</div>
+
+
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    overflow:hidden;
+  "
+>
+
+
+<!-- Level -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    background:#f8fafc;
+    color:#64748b;
+    font-size:13px;
+    width:40%;
+  "
+>
+  Alert Level
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:700;
+    color:${theme.color};
+  "
+>
+  ${level}
+</td>
+
+</tr>
+
+
+<!-- Status -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    color:#64748b;
+    font-size:13px;
+  "
+>
+  Status
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  ${status}
+</td>
+
+</tr>
+
+
+<!-- Alert Type -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    background:#f8fafc;
+    color:#64748b;
+    font-size:13px;
+  "
+>
+  Alert Type
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  ${alertType}
+</td>
+
+</tr>
+
+
+<!-- Source -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    color:#64748b;
+    font-size:13px;
+  "
+>
+  Source
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  ${source}
+</td>
+
+</tr>
+
+
+<!-- Location -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    background:#f8fafc;
+    color:#64748b;
+    font-size:13px;
+  "
+>
+  Location
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  ${location}
+</td>
+
+</tr>
+
+
+<!-- Monitoring Station -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    color:#64748b;
+    font-size:13px;
+  "
+>
+  Monitoring Station
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  ${station}
+</td>
+
+</tr>
+
+
+<!-- Time -->
+
+<tr>
+
+<td
+  style="
+    padding:12px 14px;
+    background:#f8fafc;
+    color:#64748b;
+    font-size:13px;
+  "
+>
+  Time
+</td>
+
+
+<td
+  style="
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  ${createdAt}
+</td>
+
+</tr>
+
+
+</table>
+
+</td>
+
+</tr>
+
+
+<!-- ======================================================
+     IMPORTANT NOTICE
+======================================================= -->
+
+<tr>
+
+<td
+  style="
+    padding:0 32px 25px 32px;
+  "
+>
+
+
+<div
+  style="
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    padding:16px;
+    color:#475569;
+    font-size:13px;
+    line-height:1.6;
+  "
+>
+
+
+<strong
+  style="
+    color:#0f172a;
+  "
+>
+  Important:
+</strong>
+
+
+This notification was generated by the
+Flood Early Warning System.
+
+Please review the monitoring dashboard for
+the latest flood conditions and recommended
+actions.
+
+
+</div>
+
+</td>
+
+</tr>
+
+
+<!-- ======================================================
+     FOOTER
+======================================================= -->
+
+<tr>
+
+<td
+  style="
+    background:#0f172a;
+    padding:22px 32px;
+    text-align:center;
+  "
+>
+
+
+<div
+  style="
+    color:#ffffff;
+    font-size:13px;
+    font-weight:600;
+  "
+>
+  Flood Early Warning System
+</div>
+
+
+<div
+  style="
+    color:#94a3b8;
+    font-size:11px;
+    margin-top:6px;
+    line-height:1.5;
+  "
+>
+  Automated notification • Please do not reply
+  to this email.
+</div>
+
+
+</td>
+
+</tr>
+
+
+</table>
+
+</td>
+
+</tr>
+
+</table>
 
 </body>
 
@@ -762,6 +885,7 @@ const buildHtmlEmail = (alert) => {
 */
 
 const sendAlertEmail = async (alert) => {
+
   try {
 
     /*
@@ -771,21 +895,29 @@ const sendAlertEmail = async (alert) => {
     */
 
     if (!process.env.SMTP2GO_API_KEY) {
+
       throw new Error(
         "SMTP2GO_API_KEY is missing from environment configuration."
       );
+
     }
 
+
     if (!process.env.ALERT_EMAIL_FROM) {
+
       throw new Error(
         "ALERT_EMAIL_FROM is missing from environment configuration."
       );
+
     }
 
+
     if (!alert) {
+
       throw new Error(
         "Alert data is required."
       );
+
     }
 
 
@@ -805,15 +937,39 @@ const sendAlertEmail = async (alert) => {
     |--------------------------------------------------------------------------
     */
 
-   const level = safeString(alert.level, "Alert");
+    const level =
+      safeString(
+        alert.level,
+        "Alert"
+      );
 
-const subject =
-  `🚨 ${level} Flood Alert | ${safeString(
-    alert.title,
-    "Flood Warning"
-  )}`;
+
+    const title =
+      safeString(
+        alert.title,
+        "Flood Warning"
+      );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Professional Email Subject
+    |--------------------------------------------------------------------------
+    */
+
+    const subject =
+      `🌊 Flood Early Warning System | ${level} Alert — ${title}`;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Email Content
+    |--------------------------------------------------------------------------
+    */
+
     const textBody =
       buildTextEmail(alert);
+
 
     const htmlBody =
       buildHtmlEmail(alert);
@@ -825,39 +981,40 @@ const subject =
     |--------------------------------------------------------------------------
     */
 
-    const response = await axios.post(
-      SMTP2GO_API_URL,
-      {
-        api_key:
-          process.env.SMTP2GO_API_KEY,
+    const response =
+      await axios.post(
+        SMTP2GO_API_URL,
+        {
+          api_key:
+            process.env.SMTP2GO_API_KEY,
 
-        sender:
-          process.env.ALERT_EMAIL_FROM,
+          sender:
+            process.env.ALERT_EMAIL_FROM,
 
-        to:
-          recipientEmails,
+          to:
+            recipientEmails,
 
-        subject,
+          subject,
 
-        text_body:
-          textBody,
+          text_body:
+            textBody,
 
-        html_body:
-          htmlBody,
-      },
-      {
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          Accept:
-            "application/json",
+          html_body:
+            htmlBody,
         },
+        {
+          headers: {
+            "Content-Type":
+              "application/json",
 
-        timeout:
-          SMTP_TIMEOUT,
-      }
-    );
+            Accept:
+              "application/json",
+          },
+
+          timeout:
+            SMTP_TIMEOUT,
+        }
+      );
 
 
     /*
@@ -876,6 +1033,11 @@ const subject =
 
     console.log(
       "📧 SMTP2GO ALERT EMAIL"
+    );
+
+    console.log(
+      "Subject:",
+      subject
     );
 
     console.log(
@@ -924,7 +1086,9 @@ const subject =
         "========================================"
       );
 
+
       return {
+
         success: false,
 
         message:
@@ -934,11 +1098,14 @@ const subject =
           recipientEmails,
 
         error:
-          smtpData.failures || "Unknown SMTP2GO delivery error",
+          smtpData.failures ||
+          "Unknown SMTP2GO delivery error",
 
         data:
           response.data,
+
       };
+
     }
 
 
@@ -967,6 +1134,7 @@ const subject =
 
 
     return {
+
       success: true,
 
       message:
@@ -977,6 +1145,7 @@ const subject =
 
       data:
         response.data,
+
     };
 
   } catch (error) {
@@ -1012,6 +1181,7 @@ const subject =
 
 
     return {
+
       success: false,
 
       message:
@@ -1019,8 +1189,11 @@ const subject =
 
       error:
         errorData,
+
     };
+
   }
+
 };
 
 
