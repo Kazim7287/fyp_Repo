@@ -9,7 +9,7 @@ import {
   createAlert,
   acknowledgeAlertApi,
   resolveAlertApi,
-} from "../../api/alertApi";
+} from "../../api/alertsApi";
 
 /* =========================================================
    HELPER
