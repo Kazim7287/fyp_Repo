@@ -160,8 +160,7 @@ ${safeString(alert.title, "Flood Alert")}
 ALERT DETAILS
 ----------------------------------------------
 
-Alert ID:
-${safeString(alert.id)}
+
 
 Alert Code:
 ${safeString(alert.alert_code)}
@@ -243,9 +242,9 @@ const buildHtmlEmail = (alert) => {
     safeString(alert.source)
   );
 
-  const alertId = escapeHtml(
-    safeString(alert.id)
-  );
+//   const alertId = escapeHtml(
+//     safeString(alert.id)
+//   );
 
   const alertCode = escapeHtml(
     safeString(alert.alert_code)
@@ -456,18 +455,6 @@ const buildHtmlEmail = (alert) => {
                 "
               >
 
-                <tr>
-                  <td
-                    style="
-                      padding:12px 14px;
-                      background:#f8fafc;
-                      color:#64748b;
-                      font-size:13px;
-                      width:40%;
-                    "
-                  >
-                    Alert ID
-                  </td>
 
                   <td
                     style="
