@@ -76,7 +76,7 @@ const getAlertById = async (req, res) => {
       `
       SELECT
         a.*,
-        u.full_name AS created_by_name
+        u.name AS created_by_name
       FROM alerts a
       LEFT JOIN users u
         ON a.created_by = u.id
