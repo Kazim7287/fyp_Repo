@@ -17,6 +17,12 @@ const sensorRoutes = require("./routes/sensor.routes");
 const componentRoutes = require("./routes/component.routes");
 const nodeRoutes = require("./routes/nodeRoutes");
 
+// ---------------------------------------------------------
+// ALERT ROUTES
+// ---------------------------------------------------------
+
+const alertRoutes = require("./routes/alertRoutes");
+
 const app = express();
 
 // =========================================================
@@ -58,16 +64,26 @@ if (process.env.FRONTEND_URL) {
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Requests without Origin:
+      // ---------------------------------------------------
+      // Requests without Origin
       // curl, Postman, server-to-server, etc.
+      // ---------------------------------------------------
 
       if (!origin) {
         return callback(null, true);
       }
 
+      // ---------------------------------------------------
+      // Allowed origin
+      // ---------------------------------------------------
+
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+
+      // ---------------------------------------------------
+      // Block unknown origin
+      // ---------------------------------------------------
 
       console.error(
         `❌ CORS blocked origin: ${origin}`
@@ -124,7 +140,8 @@ app.use(cookieParser());
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Flood Forecasting API is running",
+    message:
+      "Flood Forecasting API is running",
   });
 });
 
@@ -142,7 +159,8 @@ app.get("/db-test", async (req, res) => {
       success: true,
       message:
         "PostgreSQL connected successfully",
-      time: result.rows[0].current_time,
+      time:
+        result.rows[0].current_time,
     });
   } catch (error) {
     console.error(
@@ -214,12 +232,32 @@ app.use(
 );
 
 // =========================================================
+// ALERT MANAGEMENT ROUTES
+// =========================================================
+//
+// Available endpoints:
+//
+// GET    /api/alerts
+// GET    /api/alerts/:id
+// POST   /api/alerts
+// PATCH  /api/alerts/:id/acknowledge
+// PATCH  /api/alerts/:id/resolve
+//
+// =========================================================
+
+app.use(
+  "/api/alerts",
+  alertRoutes
+);
+
+// =========================================================
 // 404 HANDLER
 // =========================================================
 
 app.use((req, res) => {
   res.status(404).json({
     success: false,
+
     message:
       `Route ${req.method} ${req.originalUrl} not found`,
   });
@@ -255,10 +293,11 @@ app.use(
     // General errors
     // -----------------------------------------------------
 
-    res.status(
+    return res.status(
       err.status || 500
     ).json({
       success: false,
+
       message:
         err.message ||
         "Internal server error",
