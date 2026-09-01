@@ -1,75 +1,50 @@
 const axios = require("axios");
-
-/*
-|--------------------------------------------------------------------------
-| SMTP2GO Configuration
-|--------------------------------------------------------------------------
-|
-| Required .env variables:
-|
-| SMTP2GO_API_KEY=your_smtp2go_api_key
-| ALERT_EMAIL_FROM=your_verified_sender_email
-| ALERT_EMAIL_TO=recipient_email
-|
-|--------------------------------------------------------------------------
-*/
+const pool = require("../config/db");
 
 const SMTP2GO_API_URL =
   "https://api.smtp2go.com/v3/email/send";
-
-/*
-|--------------------------------------------------------------------------
-| Send Alert Email
-|--------------------------------------------------------------------------
-*/
 
 const sendAlertEmail = async (alert) => {
   try {
     /*
     |--------------------------------------------------------------------------
-    | Validate SMTP2GO API Key
+    | Validate SMTP2GO Configuration
     |--------------------------------------------------------------------------
     */
 
     if (!process.env.SMTP2GO_API_KEY) {
-      throw new Error(
-        "SMTP2GO_API_KEY is missing from .env"
-      );
+      throw new Error("SMTP2GO_API_KEY is missing from .env");
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Sender Email
-    |--------------------------------------------------------------------------
-    */
 
     if (!process.env.ALERT_EMAIL_FROM) {
-      throw new Error(
-        "ALERT_EMAIL_FROM is missing from .env"
-      );
+      throw new Error("ALERT_EMAIL_FROM is missing from .env");
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Receiver Email
-    |--------------------------------------------------------------------------
-    */
-
-    if (!process.env.ALERT_EMAIL_TO) {
-      throw new Error(
-        "ALERT_EMAIL_TO is missing from .env"
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Alert Data
-    |--------------------------------------------------------------------------
-    */
 
     if (!alert) {
+      throw new Error("Alert data is required.");
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Active Users
+    |--------------------------------------------------------------------------
+    */
+
+    const usersResult = await pool.query(`
+      SELECT email
+      FROM users
+      WHERE status = 'active'
+        AND email IS NOT NULL
+        AND email <> ''
+    `);
+
+    const recipientEmails = usersResult.rows.map(
+      (user) => user.email
+    );
+
+    if (recipientEmails.length === 0) {
       throw new Error(
-        "Alert data is required."
+        "No active users with valid email addresses found."
       );
     }
 
@@ -115,7 +90,7 @@ Description:
 ${alert.description || "N/A"}
 
 Time:
-${alert.timestamp || new Date().toLocaleString()}
+${alert.created_at || new Date().toLocaleString()}
 
 ========================================
 
@@ -130,36 +105,27 @@ for more information.
 
     /*
     |--------------------------------------------------------------------------
-    | SMTP2GO Request
+    | Send Email Through SMTP2GO
     |--------------------------------------------------------------------------
     */
 
     const response = await axios.post(
       SMTP2GO_API_URL,
-
       {
-        api_key:
-          process.env.SMTP2GO_API_KEY,
+        api_key: process.env.SMTP2GO_API_KEY,
 
-        sender:
-          process.env.ALERT_EMAIL_FROM,
+        sender: process.env.ALERT_EMAIL_FROM,
 
-        to: [
-          process.env.ALERT_EMAIL_TO,
-        ],
+        to: recipientEmails,
 
         subject,
 
         text_body: textBody,
       },
-
       {
         headers: {
-          "Content-Type":
-            "application/json",
-
-          Accept:
-            "application/json",
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
 
         timeout: 15000,
@@ -172,76 +138,44 @@ for more information.
     |--------------------------------------------------------------------------
     */
 
+    console.log("========================================");
+    console.log("ALERT EMAIL SENT SUCCESSFULLY");
     console.log(
-      "========================================"
+      "Recipients:",
+      recipientEmails
     );
-
-    console.log(
-      "ALERT EMAIL SENT SUCCESSFULLY"
-    );
-
     console.log(
       "SMTP2GO Response:",
       response.data
     );
-
-    console.log(
-      "========================================"
-    );
+    console.log("========================================");
 
     return {
       success: true,
-
-      message:
-        "Alert email sent successfully.",
-
+      message: "Alert email sent successfully.",
+      recipients: recipientEmails,
       data: response.data,
     };
+
   } catch (error) {
-    /*
-    |--------------------------------------------------------------------------
-    | Error Handling
-    |--------------------------------------------------------------------------
-    */
 
     const errorData =
       error.response?.data ||
       error.message ||
       "Unknown SMTP2GO error";
 
-    console.error(
-      "========================================"
-    );
-
-    console.error(
-      "SMTP2GO ALERT EMAIL FAILED"
-    );
-
-    console.error(
-      "Error:",
-      errorData
-    );
-
-    console.error(
-      "========================================"
-    );
+    console.error("========================================");
+    console.error("SMTP2GO ALERT EMAIL FAILED");
+    console.error("Error:", errorData);
+    console.error("========================================");
 
     return {
       success: false,
-
-      message:
-        "Failed to send alert email.",
-
+      message: "Failed to send alert email.",
       error: errorData,
     };
   }
 };
-
-/*
-|--------------------------------------------------------------------------
-| Export
-|--------------------------------------------------------------------------
-*/
 
 module.exports = {
   sendAlertEmail,
