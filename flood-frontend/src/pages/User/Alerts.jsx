@@ -55,7 +55,7 @@ import {
   selectAlertsUpdating,
   selectAlertsError,
   selectAlertsCreateError,
-} from "../store/slices/alertSlice";
+} from "../../store/slices/alertSlice";
 
 const { Title, Text, Paragraph } =
   Typography;
