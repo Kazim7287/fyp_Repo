@@ -4,204 +4,264 @@ import {
 } from "@reduxjs/toolkit";
 
 import {
-  getAlertsApi,
-  getAlertByIdApi,
-  createAlertApi,
+  getAlerts,
+  getAlertById,
+  createAlert,
   acknowledgeAlertApi,
   resolveAlertApi,
-} from "../../api/alertsApi";
+} from "../../api/alertApi";
 
-/*
-|--------------------------------------------------------------------------
-| Helper
-|--------------------------------------------------------------------------
-|
-| Your backend may return:
-|
-| {
-|   success: true,
-|   data: [...]
-| }
-|
-| or:
-|
-| {
-|   success: true,
-|   alerts: [...]
-| }
-|
-| This helper keeps the frontend tolerant of either format.
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   HELPER
+========================================================= */
 
-const extractData = (response) => {
-  if (!response) {
-    return null;
-  }
-
-  if (
-    response.data !== undefined
-  ) {
-    return response.data;
-  }
-
-  if (
-    response.alerts !== undefined
-  ) {
-    return response.alerts;
-  }
-
-  return response;
+const getErrorMessage = (
+  error,
+  fallback
+) => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback
+  );
 };
 
-/*
-|--------------------------------------------------------------------------
-| GET ALERTS
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   FETCH ALL ALERTS
+========================================================= */
 
 export const fetchAlerts = createAsyncThunk(
   "alerts/fetchAlerts",
 
-  async (params = {}, thunkAPI) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const response =
-        await getAlertsApi(params);
+      const data = await getAlerts();
 
-      const data =
-        extractData(response);
+      /*
+      Supports common backend responses:
 
-      return Array.isArray(data)
-        ? data
-        : data?.alerts || [];
+      {
+        alerts: [...]
+      }
+
+      OR
+
+      {
+        data: [...]
+      }
+
+      OR
+
+      [...]
+      */
+
+      return (
+        data?.alerts ||
+        data?.data ||
+        data ||
+        []
+      );
     } catch (error) {
-      return thunkAPI.rejectWithValue(
-        error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          "Failed to fetch alerts."
+      return rejectWithValue(
+        getErrorMessage(
+          error,
+          "Failed to fetch alerts"
+        )
       );
     }
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| GET SINGLE ALERT
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   FETCH ALERT BY ID
+========================================================= */
 
 export const fetchAlertById =
   createAsyncThunk(
     "alerts/fetchAlertById",
 
-    async (id, thunkAPI) => {
+    async (
+      id,
+      { rejectWithValue }
+    ) => {
       try {
-        const response =
-          await getAlertByIdApi(id);
+        if (!id) {
+          return rejectWithValue(
+            "Alert ID is required"
+          );
+        }
 
-        return extractData(response);
+        const data =
+          await getAlertById(id);
+
+        /*
+        Supports:
+
+        {
+          alert: {...}
+        }
+
+        OR
+
+        {
+          data: {...}
+        }
+
+        OR
+
+        {...}
+        */
+
+        return (
+          data?.alert ||
+          data?.data ||
+          data
+        );
       } catch (error) {
-        return thunkAPI.rejectWithValue(
-          error.response?.data?.message ||
-            error.response?.data?.error ||
-            error.message ||
-            "Failed to fetch alert."
+        return rejectWithValue(
+          getErrorMessage(
+            error,
+            "Failed to fetch alert details"
+          )
         );
       }
     }
   );
 
-/*
-|--------------------------------------------------------------------------
-| CREATE MANUAL ALERT
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   CREATE MANUAL ALERT
+========================================================= */
 
 export const createManualAlert =
   createAsyncThunk(
     "alerts/createManualAlert",
 
-    async (alertData, thunkAPI) => {
+    async (
+      alertData,
+      { rejectWithValue }
+    ) => {
       try {
-        const response =
-          await createAlertApi(
+        const data =
+          await createAlert(
             alertData
           );
 
-        return extractData(response);
+        /*
+        Supports:
+
+        {
+          alert: {...}
+        }
+
+        OR
+
+        {
+          data: {...}
+        }
+        */
+
+        return (
+          data?.alert ||
+          data?.data ||
+          data
+        );
       } catch (error) {
-        return thunkAPI.rejectWithValue(
-          error.response?.data?.message ||
-            error.response?.data?.error ||
-            error.message ||
-            "Failed to create alert."
+        return rejectWithValue(
+          getErrorMessage(
+            error,
+            "Failed to create alert"
+          )
         );
       }
     }
   );
 
-/*
-|--------------------------------------------------------------------------
-| ACKNOWLEDGE ALERT
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   ACKNOWLEDGE ALERT
+========================================================= */
 
 export const acknowledgeAlert =
   createAsyncThunk(
     "alerts/acknowledgeAlert",
 
-    async (id, thunkAPI) => {
+    async (
+      id,
+      { rejectWithValue }
+    ) => {
       try {
-        const response =
+        if (!id) {
+          return rejectWithValue(
+            "Alert ID is required"
+          );
+        }
+
+        const data =
           await acknowledgeAlertApi(
             id
           );
 
-        return extractData(response);
+        return (
+          data?.alert ||
+          data?.data ||
+          data ||
+          { id }
+        );
       } catch (error) {
-        return thunkAPI.rejectWithValue(
-          error.response?.data?.message ||
-            error.response?.data?.error ||
-            error.message ||
-            "Failed to acknowledge alert."
+        return rejectWithValue(
+          getErrorMessage(
+            error,
+            "Failed to acknowledge alert"
+          )
         );
       }
     }
   );
 
-/*
-|--------------------------------------------------------------------------
-| RESOLVE ALERT
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   RESOLVE ALERT
+========================================================= */
 
 export const resolveAlert =
   createAsyncThunk(
     "alerts/resolveAlert",
 
-    async (id, thunkAPI) => {
+    async (
+      id,
+      { rejectWithValue }
+    ) => {
       try {
-        const response =
-          await resolveAlertApi(id);
+        if (!id) {
+          return rejectWithValue(
+            "Alert ID is required"
+          );
+        }
 
-        return extractData(response);
+        const data =
+          await resolveAlertApi(
+            id
+          );
+
+        return (
+          data?.alert ||
+          data?.data ||
+          data ||
+          { id }
+        );
       } catch (error) {
-        return thunkAPI.rejectWithValue(
-          error.response?.data?.message ||
-            error.response?.data?.error ||
-            error.message ||
-            "Failed to resolve alert."
+        return rejectWithValue(
+          getErrorMessage(
+            error,
+            "Failed to resolve alert"
+          )
         );
       }
     }
   );
 
-/*
-|--------------------------------------------------------------------------
-| INITIAL STATE
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   INITIAL STATE
+========================================================= */
 
 const initialState = {
   alerts: [],
@@ -221,11 +281,9 @@ const initialState = {
   updateError: null,
 };
 
-/*
-|--------------------------------------------------------------------------
-| ALERT SLICE
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   SLICE
+========================================================= */
 
 const alertSlice = createSlice({
   name: "alerts",
@@ -233,25 +291,37 @@ const alertSlice = createSlice({
   initialState,
 
   reducers: {
-    clearAlertError: (state) => {
+    /* =====================================================
+       CLEAR GENERAL ERROR
+    ===================================================== */
+
+    clearAlertsError: (state) => {
       state.error = null;
     },
 
-    clearCreateAlertError: (state) => {
+    /* =====================================================
+       CLEAR CREATE ERROR
+    ===================================================== */
+
+    clearAlertsCreateError: (
+      state
+    ) => {
       state.createError = null;
     },
 
-    clearUpdateAlertError: (state) => {
+    /* =====================================================
+       CLEAR UPDATE ERROR
+    ===================================================== */
+
+    clearAlertsUpdateError: (
+      state
+    ) => {
       state.updateError = null;
     },
 
-    setSelectedAlert: (
-      state,
-      action
-    ) => {
-      state.selectedAlert =
-        action.payload;
-    },
+    /* =====================================================
+       CLEAR SELECTED ALERT
+    ===================================================== */
 
     clearSelectedAlert: (state) => {
       state.selectedAlert = null;
@@ -259,13 +329,12 @@ const alertSlice = createSlice({
   },
 
   extraReducers: (builder) => {
-    /*
-    |--------------------------------------------------------------------------
-    | FETCH ALERTS
-    |--------------------------------------------------------------------------
-    */
-
     builder
+
+      /* ===================================================
+         FETCH ALERTS
+      =================================================== */
+
       .addCase(
         fetchAlerts.pending,
         (state) => {
@@ -276,88 +345,133 @@ const alertSlice = createSlice({
 
       .addCase(
         fetchAlerts.fulfilled,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.loading = false;
 
+          /*
+          Make sure alerts is always
+          an array.
+          */
+
           state.alerts =
-            action.payload || [];
+            Array.isArray(
+              action.payload
+            )
+              ? action.payload
+              : [];
         }
       )
 
       .addCase(
         fetchAlerts.rejected,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.loading = false;
 
           state.error =
             action.payload ||
-            "Failed to fetch alerts.";
+            "Failed to fetch alerts";
         }
-      );
+      )
 
-    /*
-    |--------------------------------------------------------------------------
-    | FETCH SINGLE ALERT
-    |--------------------------------------------------------------------------
-    */
+      /* ===================================================
+         FETCH ALERT BY ID
+      =================================================== */
 
-    builder
       .addCase(
         fetchAlertById.pending,
         (state) => {
-          state.loading = true;
           state.error = null;
         }
       )
 
       .addCase(
         fetchAlertById.fulfilled,
-        (state, action) => {
-          state.loading = false;
-
+        (
+          state,
+          action
+        ) => {
           state.selectedAlert =
             action.payload;
+
+          /*
+          Also update the alert
+          inside the main list if
+          it already exists.
+          */
+
+          if (
+            action.payload?.id
+          ) {
+            const index =
+              state.alerts.findIndex(
+                (alert) =>
+                  alert.id ===
+                  action.payload.id
+              );
+
+            if (index !== -1) {
+              state.alerts[index] =
+                {
+                  ...state.alerts[
+                    index
+                  ],
+                  ...action.payload,
+                };
+            }
+          }
         }
       )
 
       .addCase(
         fetchAlertById.rejected,
-        (state, action) => {
-          state.loading = false;
-
+        (
+          state,
+          action
+        ) => {
           state.error =
             action.payload ||
-            "Failed to fetch alert.";
+            "Failed to fetch alert details";
         }
-      );
+      )
 
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE MANUAL ALERT
-    |--------------------------------------------------------------------------
-    */
+      /* ===================================================
+         CREATE MANUAL ALERT
+      =================================================== */
 
-    builder
       .addCase(
         createManualAlert.pending,
         (state) => {
           state.creating = true;
 
-          state.createError = null;
+          state.createError =
+            null;
         }
       )
 
       .addCase(
         createManualAlert.fulfilled,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.creating = false;
 
-          const createdAlert =
-            action.payload;
+          /*
+          Add newly created alert
+          to the top of the list.
+          */
 
-          if (createdAlert) {
+          if (
+            action.payload
+          ) {
             state.alerts.unshift(
-              createdAlert
+              action.payload
             );
           }
         }
@@ -365,205 +479,236 @@ const alertSlice = createSlice({
 
       .addCase(
         createManualAlert.rejected,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.creating = false;
 
           state.createError =
             action.payload ||
-            "Failed to create alert.";
+            "Failed to create alert";
         }
-      );
+      )
 
-    /*
-    |--------------------------------------------------------------------------
-    | ACKNOWLEDGE ALERT
-    |--------------------------------------------------------------------------
-    */
+      /* ===================================================
+         ACKNOWLEDGE ALERT
+      =================================================== */
 
-    builder
       .addCase(
         acknowledgeAlert.pending,
         (state) => {
           state.updating = true;
 
-          state.updateError = null;
+          state.updateError =
+            null;
         }
       )
 
       .addCase(
         acknowledgeAlert.fulfilled,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.updating = false;
 
           const updatedAlert =
             action.payload;
 
-          if (!updatedAlert) {
-            return;
-          }
-
-          const index =
-            state.alerts.findIndex(
-              (alert) =>
-                String(alert.id) ===
-                String(
-                  updatedAlert.id
-                )
-            );
-
-          if (index !== -1) {
-            state.alerts[index] =
-              updatedAlert;
-          }
-
           if (
-            state.selectedAlert &&
-            String(
-              state.selectedAlert.id
-            ) ===
-              String(updatedAlert.id)
+            updatedAlert?.id
           ) {
-            state.selectedAlert =
-              updatedAlert;
+            const index =
+              state.alerts.findIndex(
+                (alert) =>
+                  alert.id ===
+                  updatedAlert.id
+              );
+
+            if (index !== -1) {
+              state.alerts[index] =
+                {
+                  ...state.alerts[
+                    index
+                  ],
+                  ...updatedAlert,
+                };
+            }
+
+            /*
+            Update modal data too.
+            */
+
+            if (
+              state.selectedAlert
+                ?.id ===
+              updatedAlert.id
+            ) {
+              state.selectedAlert =
+                {
+                  ...state.selectedAlert,
+                  ...updatedAlert,
+                };
+            }
           }
         }
       )
 
       .addCase(
         acknowledgeAlert.rejected,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.updating = false;
 
           state.updateError =
             action.payload ||
-            "Failed to acknowledge alert.";
+            "Failed to acknowledge alert";
         }
-      );
+      )
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESOLVE ALERT
-    |--------------------------------------------------------------------------
-    */
+      /* ===================================================
+         RESOLVE ALERT
+      =================================================== */
 
-    builder
       .addCase(
         resolveAlert.pending,
         (state) => {
           state.updating = true;
 
-          state.updateError = null;
+          state.updateError =
+            null;
         }
       )
 
       .addCase(
         resolveAlert.fulfilled,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.updating = false;
 
           const updatedAlert =
             action.payload;
 
-          if (!updatedAlert) {
-            return;
-          }
-
-          const index =
-            state.alerts.findIndex(
-              (alert) =>
-                String(alert.id) ===
-                String(
-                  updatedAlert.id
-                )
-            );
-
-          if (index !== -1) {
-            state.alerts[index] =
-              updatedAlert;
-          }
-
           if (
-            state.selectedAlert &&
-            String(
-              state.selectedAlert.id
-            ) ===
-              String(updatedAlert.id)
+            updatedAlert?.id
           ) {
-            state.selectedAlert =
-              updatedAlert;
+            const index =
+              state.alerts.findIndex(
+                (alert) =>
+                  alert.id ===
+                  updatedAlert.id
+              );
+
+            if (index !== -1) {
+              state.alerts[index] =
+                {
+                  ...state.alerts[
+                    index
+                  ],
+                  ...updatedAlert,
+                };
+            }
+
+            /*
+            Update selected alert.
+            */
+
+            if (
+              state.selectedAlert
+                ?.id ===
+              updatedAlert.id
+            ) {
+              state.selectedAlert =
+                {
+                  ...state.selectedAlert,
+                  ...updatedAlert,
+                };
+            }
           }
         }
       )
 
       .addCase(
         resolveAlert.rejected,
-        (state, action) => {
+        (
+          state,
+          action
+        ) => {
           state.updating = false;
 
           state.updateError =
             action.payload ||
-            "Failed to resolve alert.";
+            "Failed to resolve alert";
         }
       );
   },
 });
 
-/*
-|--------------------------------------------------------------------------
-| ACTIONS
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   ACTIONS
+========================================================= */
 
 export const {
-  clearAlertError,
-  clearCreateAlertError,
-  clearUpdateAlertError,
-  setSelectedAlert,
+  clearAlertsError,
+  clearAlertsCreateError,
+  clearAlertsUpdateError,
   clearSelectedAlert,
 } = alertSlice.actions;
 
-/*
-|--------------------------------------------------------------------------
-| SELECTORS
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   SELECTORS
+========================================================= */
 
-export const selectAlerts =
-  (state) =>
-    state.alerts?.alerts || [];
+export const selectAlerts = (
+  state
+) =>
+  state.alerts?.alerts || [];
 
-export const selectSelectedAlert =
-  (state) =>
-    state.alerts?.selectedAlert || null;
+export const selectSelectedAlert = (
+  state
+) =>
+  state.alerts
+    ?.selectedAlert || null;
 
-export const selectAlertsLoading =
-  (state) =>
-    state.alerts?.loading || false;
+export const selectAlertsLoading = (
+  state
+) =>
+  state.alerts?.loading || false;
 
-export const selectAlertsCreating =
-  (state) =>
-    state.alerts?.creating || false;
+export const selectAlertsCreating = (
+  state
+) =>
+  state.alerts?.creating || false;
 
-export const selectAlertsUpdating =
-  (state) =>
-    state.alerts?.updating || false;
+export const selectAlertsUpdating = (
+  state
+) =>
+  state.alerts?.updating || false;
 
-export const selectAlertsError =
-  (state) =>
-    state.alerts?.error || null;
+export const selectAlertsError = (
+  state
+) =>
+  state.alerts?.error || null;
 
-export const selectAlertsCreateError =
-  (state) =>
-    state.alerts?.createError || null;
+export const selectAlertsCreateError = (
+  state
+) =>
+  state.alerts?.createError ||
+  null;
 
-export const selectAlertsUpdateError =
-  (state) =>
-    state.alerts?.updateError || null;
+export const selectAlertsUpdateError = (
+  state
+) =>
+  state.alerts?.updateError ||
+  null;
 
-/*
-|--------------------------------------------------------------------------
-| EXPORT REDUCER
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   REDUCER
+========================================================= */
 
 export default alertSlice.reducer;
