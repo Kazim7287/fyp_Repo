@@ -1,4 +1,8 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   Card,
@@ -19,6 +23,8 @@ import {
   Popconfirm,
   message,
   Empty,
+  Spin,
+  Alert as AntAlert,
 } from "antd";
 
 import {
@@ -31,53 +37,30 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   SafetyCertificateOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 
-const { Title, Text, Paragraph } = Typography;
+import { useDispatch, useSelector } from "react-redux";
+
+import {
+  fetchAlerts,
+  fetchAlertById,
+  createManualAlert,
+  resolveAlert,
+  acknowledgeAlert,
+  selectAlerts,
+  selectSelectedAlert,
+  selectAlertsLoading,
+  selectAlertsCreating,
+  selectAlertsUpdating,
+  selectAlertsError,
+  selectAlertsCreateError,
+} from "../../store/slices/alertSlice";
+
+const { Title, Text, Paragraph } =
+  Typography;
 
 const { TextArea } = Input;
-
-/* =========================================================
-   PROTOTYPE ALERT DATA
-========================================================= */
-
-const initialAlerts = [
-  {
-    id: "ALT-001",
-    location: "Nowshera",
-    station: "NWS-01",
-    level: "Critical",
-    status: "Active",
-    title: "Critical Water Level",
-    description:
-      "Water level has exceeded the critical threshold.",
-    timestamp: "2026-08-19 20:42:15",
-  },
-
-  {
-    id: "ALT-002",
-    location: "Kabul",
-    station: "NWS-02",
-    level: "Warning",
-    status: "Active",
-    title: "Rapid Water-Level Increase",
-    description:
-      "Water level is increasing rapidly and approaching warning threshold.",
-    timestamp: "2026-08-19 20:35:42",
-  },
-
-  {
-    id: "ALT-003",
-    location: "Station 02",
-    station: "NWS-02",
-    level: "Watch",
-    status: "Resolved",
-    title: "Heavy Rainfall Watch",
-    description:
-      "Rainfall intensity temporarily exceeded the monitoring threshold.",
-    timestamp: "2026-08-19 18:20:11",
-  },
-];
 
 /* =========================================================
    LEVEL TAG
@@ -88,7 +71,9 @@ const getLevelTag = (level) => {
     case "Critical":
       return (
         <Tag
-          icon={<CloseCircleOutlined />}
+          icon={
+            <CloseCircleOutlined />
+          }
           color="error"
         >
           Critical
@@ -125,25 +110,44 @@ const getLevelTag = (level) => {
 ========================================================= */
 
 const getStatusTag = (status) => {
-  if (status === "Active") {
-    return (
-      <Tag
-        icon={<AlertOutlined />}
-        color="error"
-      >
-        Active
-      </Tag>
-    );
-  }
+  switch (status) {
+    case "Active":
+      return (
+        <Tag
+          icon={<AlertOutlined />}
+          color="error"
+        >
+          Active
+        </Tag>
+      );
 
-  return (
-    <Tag
-      icon={<CheckCircleOutlined />}
-      color="success"
-    >
-      Resolved
-    </Tag>
-  );
+    case "Acknowledged":
+      return (
+        <Tag
+          icon={
+            <CheckCircleOutlined />
+          }
+          color="processing"
+        >
+          Acknowledged
+        </Tag>
+      );
+
+    case "Resolved":
+      return (
+        <Tag
+          icon={
+            <CheckCircleOutlined />
+          }
+          color="success"
+        >
+          Resolved
+        </Tag>
+      );
+
+    default:
+      return <Tag>{status}</Tag>;
+  }
 };
 
 /* =========================================================
@@ -151,23 +155,76 @@ const getStatusTag = (status) => {
 ========================================================= */
 
 const Alerts = () => {
-  const [alerts, setAlerts] =
-    useState(initialAlerts);
+  /*
+  |--------------------------------------------------------------------------
+  | REDUX
+  |--------------------------------------------------------------------------
+  */
 
-  const [selectedAlert, setSelectedAlert] =
-    useState(null);
+  const dispatch = useDispatch();
 
-  const [viewModalOpen, setViewModalOpen] =
-    useState(false);
+  const alerts = useSelector(
+    selectAlerts
+  );
 
-  const [createModalOpen, setCreateModalOpen] =
-    useState(false);
+  const selectedAlert = useSelector(
+    selectSelectedAlert
+  );
 
-  const [form] = Form.useForm();
+  const loading = useSelector(
+    selectAlertsLoading
+  );
 
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
+  const creating = useSelector(
+    selectAlertsCreating
+  );
+
+  const updating = useSelector(
+    selectAlertsUpdating
+  );
+
+  const error = useSelector(
+    selectAlertsError
+  );
+
+  const createError = useSelector(
+    selectAlertsCreateError
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | LOCAL UI STATE
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    viewModalOpen,
+    setViewModalOpen,
+  ] = useState(false);
+
+  const [
+    createModalOpen,
+    setCreateModalOpen,
+  ] = useState(false);
+
+  const [form] =
+    Form.useForm();
+
+  /*
+  |--------------------------------------------------------------------------
+  | LOAD ALERTS
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    dispatch(fetchAlerts());
+  }, [dispatch]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | STATISTICS
+  |--------------------------------------------------------------------------
+  */
 
   const statistics = useMemo(() => {
     return {
@@ -180,103 +237,213 @@ const Alerts = () => {
 
       critical: alerts.filter(
         (alert) =>
-          alert.level === "Critical" &&
-          alert.status === "Active"
+          alert.level ===
+            "Critical" &&
+          alert.status !==
+            "Resolved"
       ).length,
 
       resolved: alerts.filter(
         (alert) =>
-          alert.status === "Resolved"
+          alert.status ===
+          "Resolved"
       ).length,
     };
   }, [alerts]);
 
-  /* =======================================================
-     VIEW ALERT
-  ======================================================= */
+  /*
+  |--------------------------------------------------------------------------
+  | VIEW ALERT
+  |--------------------------------------------------------------------------
+  */
 
-  const handleView = (alert) => {
-    setSelectedAlert(alert);
-    setViewModalOpen(true);
+  const handleView = async (
+    alert
+  ) => {
+    try {
+      await dispatch(
+        fetchAlertById(alert.id)
+      ).unwrap();
+
+      setViewModalOpen(true);
+    } catch (error) {
+      message.error(
+        error ||
+          "Unable to load alert details."
+      );
+    }
   };
 
-  /* =======================================================
-     RESOLVE ALERT
-  ======================================================= */
+  /*
+  |--------------------------------------------------------------------------
+  | CREATE MODAL
+  |--------------------------------------------------------------------------
+  */
 
-  const handleResolve = (alertId) => {
-    setAlerts((previous) =>
-      previous.map((alert) =>
-        alert.id === alertId
-          ? {
-              ...alert,
-              status: "Resolved",
-            }
-          : alert
-      )
-    );
+  const openCreateModal = () => {
+    form.resetFields();
 
-    message.success(
-      "Alert resolved successfully."
-    );
+    setCreateModalOpen(true);
   };
 
-  /* =======================================================
-     CREATE ALERT
-  ======================================================= */
+  /*
+  |--------------------------------------------------------------------------
+  | CREATE MANUAL ALERT
+  |--------------------------------------------------------------------------
+  */
 
   const handleCreate = async () => {
     try {
       const values =
         await form.validateFields();
 
-      const newAlert = {
-        id: `ALT-${String(
-          alerts.length + 1
-        ).padStart(3, "0")}`,
+      const alertData = {
+        location:
+          values.location,
 
-        location: values.location,
+        station:
+          values.station,
 
-        station: values.station,
+        level:
+          values.level,
 
-        level: values.level,
-
-        status: "Active",
-
-        title: values.title,
+        title:
+          values.title,
 
         description:
           values.description,
 
-        timestamp:
-          new Date().toLocaleString(),
+        /*
+        |--------------------------------------------------------------------------
+        | IMPORTANT
+        |--------------------------------------------------------------------------
+        |
+        | This tells the backend that this
+        | alert was manually created.
+        |
+        */
+
+        type: "manual",
       };
 
-      setAlerts((previous) => [
-        newAlert,
-        ...previous,
-      ]);
+      await dispatch(
+        createManualAlert(
+          alertData
+        )
+      ).unwrap();
+
+      message.success(
+        "Manual alert created successfully."
+      );
 
       form.resetFields();
 
       setCreateModalOpen(false);
 
-      message.success(
-        "Alert created successfully."
-      );
+      /*
+      |--------------------------------------------------------------------------
+      | Refresh from database
+      |--------------------------------------------------------------------------
+      */
+
+      dispatch(fetchAlerts());
     } catch (error) {
-      // Validation error
+      /*
+      |--------------------------------------------------------------------------
+      | Ant Design validation errors
+      |--------------------------------------------------------------------------
+      |
+      | validateFields() rejects when validation
+      | fails. We don't need to show an error.
+      |
+      */
+
+      if (
+        typeof error ===
+        "string"
+      ) {
+        message.error(error);
+      }
     }
   };
 
-  /* =======================================================
-     TABLE COLUMNS
-  ======================================================= */
+  /*
+  |--------------------------------------------------------------------------
+  | RESOLVE ALERT
+  |--------------------------------------------------------------------------
+  */
+
+  const handleResolve = async (
+    alertId
+  ) => {
+    try {
+      await dispatch(
+        resolveAlert(alertId)
+      ).unwrap();
+
+      message.success(
+        "Alert resolved successfully."
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Refresh database data
+      |--------------------------------------------------------------------------
+      */
+
+      dispatch(fetchAlerts());
+
+      setViewModalOpen(false);
+    } catch (error) {
+      message.error(
+        error ||
+          "Failed to resolve alert."
+      );
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | ACKNOWLEDGE ALERT
+  |--------------------------------------------------------------------------
+  */
+
+  const handleAcknowledge =
+    async (alertId) => {
+      try {
+        await dispatch(
+          acknowledgeAlert(
+            alertId
+          )
+        ).unwrap();
+
+        message.success(
+          "Alert acknowledged successfully."
+        );
+
+        dispatch(
+          fetchAlerts()
+        );
+      } catch (error) {
+        message.error(
+          error ||
+            "Failed to acknowledge alert."
+        );
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | TABLE COLUMNS
+  |--------------------------------------------------------------------------
+  */
 
   const columns = [
     {
       title: "Location",
+
       dataIndex: "location",
+
       key: "location",
 
       render: (value) => (
@@ -284,7 +451,7 @@ const Alerts = () => {
           <EnvironmentOutlined />
 
           <Text strong>
-            {value}
+            {value || "—"}
           </Text>
         </Space>
       ),
@@ -292,7 +459,9 @@ const Alerts = () => {
 
     {
       title: "Level",
+
       dataIndex: "level",
+
       key: "level",
 
       render: (value) =>
@@ -301,7 +470,9 @@ const Alerts = () => {
 
     {
       title: "Status",
+
       dataIndex: "status",
+
       key: "status",
 
       render: (value) =>
@@ -310,27 +481,67 @@ const Alerts = () => {
 
     {
       title: "Station",
+
       dataIndex: "station",
+
       key: "station",
 
       render: (value) => (
         <Text>
-          {value}
+          {value || "—"}
         </Text>
       ),
     },
 
     {
+      title: "Source",
+
+      dataIndex: "type",
+
+      key: "type",
+
+      render: (value) => {
+        const type =
+          String(
+            value || ""
+          ).toLowerCase();
+
+        if (
+          type === "automatic"
+        ) {
+          return (
+            <Tag color="blue">
+              Automatic
+            </Tag>
+          );
+        }
+
+        return (
+          <Tag color="purple">
+            Manual
+          </Tag>
+        );
+      },
+    },
+
+    {
       title: "Time",
+
       dataIndex: "timestamp",
+
       key: "timestamp",
 
-      render: (value) => (
+      render: (
+        value,
+        record
+      ) => (
         <Space>
           <ClockCircleOutlined />
 
           <Text type="secondary">
-            {value}
+            {value ||
+              record.created_at ||
+              "—"}
           </Text>
         </Space>
       ),
@@ -338,15 +549,23 @@ const Alerts = () => {
 
     {
       title: "Action",
+
       key: "action",
 
-      render: (_, record) => (
+      render: (
+        _,
+        record
+      ) => (
         <Space wrap>
           <Button
             size="small"
-            icon={<EyeOutlined />}
+            icon={
+              <EyeOutlined />
+            }
             onClick={() =>
-              handleView(record)
+              handleView(
+                record
+              )
             }
           >
             View
@@ -354,6 +573,33 @@ const Alerts = () => {
 
           {record.status ===
             "Active" && (
+            <Popconfirm
+              title="Acknowledge this alert?"
+              description="The alert will be marked as acknowledged."
+              okText="Acknowledge"
+              cancelText="Cancel"
+              onConfirm={() =>
+                handleAcknowledge(
+                  record.id
+                )
+              }
+            >
+              <Button
+                size="small"
+                icon={
+                  <CheckCircleOutlined />
+                }
+                loading={
+                  updating
+                }
+              >
+                Acknowledge
+              </Button>
+            </Popconfirm>
+          )}
+
+          {record.status !==
+            "Resolved" && (
             <Popconfirm
               title="Resolve this alert?"
               description="The alert will be marked as resolved."
@@ -368,8 +614,12 @@ const Alerts = () => {
               <Button
                 size="small"
                 type="primary"
+                danger
                 icon={
                   <CheckCircleOutlined />
+                }
+                loading={
+                  updating
                 }
               >
                 Resolve
@@ -381,13 +631,14 @@ const Alerts = () => {
     },
   ];
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  /*
+  |--------------------------------------------------------------------------
+  | RENDER
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div>
-
       {/* ===================================================
           HEADER
       =================================================== */}
@@ -395,11 +646,16 @@ const Alerts = () => {
       <div
         style={{
           marginBottom: 24,
+
           display: "flex",
+
           justifyContent:
             "space-between",
+
           alignItems: "center",
+
           gap: 16,
+
           flexWrap: "wrap",
         }}
       >
@@ -414,22 +670,74 @@ const Alerts = () => {
           </Title>
 
           <Text type="secondary">
-            Monitor, create, manage, and
-            resolve flood and environmental
+            Monitor, create, manage,
+            acknowledge, and resolve
+            flood and environmental
             alerts.
           </Text>
         </div>
 
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() =>
-            setCreateModalOpen(true)
-          }
-        >
-          Create Alert
-        </Button>
+        <Space>
+          <Button
+            icon={
+              <ReloadOutlined />
+            }
+            onClick={() =>
+              dispatch(
+                fetchAlerts()
+              )
+            }
+            loading={loading}
+          >
+            Refresh
+          </Button>
+
+          <Button
+            type="primary"
+            icon={
+              <PlusOutlined />
+            }
+            onClick={
+              openCreateModal
+            }
+          >
+            Create Alert
+          </Button>
+        </Space>
       </div>
+
+      {/* ===================================================
+          API ERROR
+      =================================================== */}
+
+      {error && (
+        <AntAlert
+          type="error"
+          showIcon
+          closable
+          message="Unable to load alerts"
+          description={error}
+          style={{
+            marginBottom: 24,
+          }}
+        />
+      )}
+
+      {/* ===================================================
+          CREATE ERROR
+      =================================================== */}
+
+      {createError && (
+        <AntAlert
+          type="error"
+          showIcon
+          message="Alert creation failed"
+          description={createError}
+          style={{
+            marginBottom: 24,
+          }}
+        />
+      )}
 
       {/* ===================================================
           STATISTICS
@@ -441,7 +749,6 @@ const Alerts = () => {
           marginBottom: 24,
         }}
       >
-
         <Col
           xs={24}
           sm={12}
@@ -450,7 +757,9 @@ const Alerts = () => {
           <Card>
             <Statistic
               title="Total Alerts"
-              value={statistics.total}
+              value={
+                statistics.total
+              }
               prefix={
                 <AlertOutlined />
               }
@@ -466,7 +775,9 @@ const Alerts = () => {
           <Card>
             <Statistic
               title="Active Alerts"
-              value={statistics.active}
+              value={
+                statistics.active
+              }
               prefix={
                 <WarningOutlined />
               }
@@ -482,7 +793,9 @@ const Alerts = () => {
           <Card>
             <Statistic
               title="Critical Alerts"
-              value={statistics.critical}
+              value={
+                statistics.critical
+              }
               prefix={
                 <CloseCircleOutlined />
               }
@@ -498,14 +811,15 @@ const Alerts = () => {
           <Card>
             <Statistic
               title="Resolved"
-              value={statistics.resolved}
+              value={
+                statistics.resolved
+              }
               prefix={
                 <CheckCircleOutlined />
               }
             />
           </Card>
         </Col>
-
       </Row>
 
       {/* ===================================================
@@ -530,26 +844,49 @@ const Alerts = () => {
           </Space>
         }
       >
-
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={alerts}
-          pagination={{
-            pageSize: 10,
-          }}
-          scroll={{
-            x: 900,
-          }}
-          locale={{
-            emptyText: (
-              <Empty
-                description="No alerts found"
-              />
-            ),
-          }}
-        />
-
+        {loading &&
+        alerts.length === 0 ? (
+          <div
+            style={{
+              minHeight: 250,
+              display: "flex",
+              justifyContent:
+                "center",
+              alignItems: "center",
+            }}
+          >
+            <Spin
+              size="large"
+              tip="Loading alerts..."
+            />
+          </div>
+        ) : (
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={alerts}
+            loading={loading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [
+                "10",
+                "20",
+                "50",
+              ],
+            }}
+            scroll={{
+              x: 1100,
+            }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description="No alerts found"
+                />
+              ),
+            }}
+          />
+        )}
       </Card>
 
       {/* ===================================================
@@ -569,16 +906,14 @@ const Alerts = () => {
           setViewModalOpen(false)
         }
         footer={null}
-        width={650}
+        width={700}
       >
-
         {selectedAlert && (
           <>
             <Descriptions
               bordered
               column={1}
             >
-
               <Descriptions.Item
                 label="Alert ID"
               >
@@ -590,13 +925,15 @@ const Alerts = () => {
               <Descriptions.Item
                 label="Location"
               >
-                {selectedAlert.location}
+                {selectedAlert.location ||
+                  "—"}
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Station"
               >
-                {selectedAlert.station}
+                {selectedAlert.station ||
+                  "—"}
               </Descriptions.Item>
 
               <Descriptions.Item
@@ -616,17 +953,45 @@ const Alerts = () => {
               </Descriptions.Item>
 
               <Descriptions.Item
+                label="Source"
+              >
+                {String(
+                  selectedAlert.type ||
+                    ""
+                ).toLowerCase() ===
+                "automatic" ? (
+                  <Tag color="blue">
+                    Automatic
+                  </Tag>
+                ) : (
+                  <Tag color="purple">
+                    Manual
+                  </Tag>
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item
                 label="Title"
               >
-                {selectedAlert.title}
+                {selectedAlert.title ||
+                  "—"}
               </Descriptions.Item>
 
               <Descriptions.Item
                 label="Time"
               >
-                {selectedAlert.timestamp}
+                {selectedAlert.timestamp ||
+                  selectedAlert.created_at ||
+                  "—"}
               </Descriptions.Item>
 
+              {selectedAlert.created_by && (
+                <Descriptions.Item
+                  label="Created By"
+                >
+                  {selectedAlert.created_by}
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             <Card
@@ -645,14 +1010,52 @@ const Alerts = () => {
                   marginBottom: 0,
                 }}
               >
-                {
-                  selectedAlert.description
-                }
+                {selectedAlert.description ||
+                  "No description available."}
               </Paragraph>
             </Card>
 
             {selectedAlert.status ===
               "Active" && (
+              <Space
+                style={{
+                  marginTop: 16,
+                }}
+              >
+                <Button
+                  icon={
+                    <CheckCircleOutlined />
+                  }
+                  onClick={() =>
+                    handleAcknowledge(
+                      selectedAlert.id
+                    )
+                  }
+                  loading={updating}
+                >
+                  Acknowledge
+                </Button>
+
+                <Button
+                  type="primary"
+                  danger
+                  icon={
+                    <CheckCircleOutlined />
+                  }
+                  onClick={() =>
+                    handleResolve(
+                      selectedAlert.id
+                    )
+                  }
+                  loading={updating}
+                >
+                  Resolve Alert
+                </Button>
+              </Space>
+            )}
+
+            {selectedAlert.status ===
+              "Acknowledged" && (
               <Button
                 type="primary"
                 danger
@@ -662,27 +1065,22 @@ const Alerts = () => {
                 style={{
                   marginTop: 16,
                 }}
-                onClick={() => {
+                onClick={() =>
                   handleResolve(
                     selectedAlert.id
-                  );
-
-                  setSelectedAlert({
-                    ...selectedAlert,
-                    status: "Resolved",
-                  });
-                }}
+                  )
+                }
+                loading={updating}
               >
                 Resolve Alert
               </Button>
             )}
           </>
         )}
-
       </Modal>
 
       {/* ===================================================
-          CREATE ALERT MODAL
+          CREATE MANUAL ALERT MODAL
       =================================================== */}
 
       <Modal
@@ -690,24 +1088,27 @@ const Alerts = () => {
           <Space>
             <PlusOutlined />
 
-            Create New Alert
+            Create Manual Alert
           </Space>
         }
         open={createModalOpen}
         onCancel={() => {
-          setCreateModalOpen(false);
+          setCreateModalOpen(
+            false
+          );
+
           form.resetFields();
         }}
         onOk={handleCreate}
         okText="Create Alert"
+        confirmLoading={creating}
         width={650}
+        destroyOnHidden
       >
-
         <Form
           form={form}
           layout="vertical"
         >
-
           <Form.Item
             label="Location"
             name="location"
@@ -798,7 +1199,9 @@ const Alerts = () => {
               },
             ]}
           >
-            <Input placeholder="Enter alert title" />
+            <Input
+              placeholder="Enter alert title"
+            />
           </Form.Item>
 
           <Form.Item
@@ -818,10 +1221,14 @@ const Alerts = () => {
             />
           </Form.Item>
 
+          <AntAlert
+            type="info"
+            showIcon
+            message="Manual Alert"
+            description="This alert will be stored as a manual alert and associated with the currently logged-in user."
+          />
         </Form>
-
       </Modal>
-
     </div>
   );
 };
