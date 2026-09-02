@@ -34,7 +34,7 @@ import L from "leaflet";
 
 import "leaflet/dist/leaflet.css";
 
-import { getNodes } from "../api/nodes";
+import { getNodes } from "../../api/nodeApi";
 
 // =========================================================
 // FIX DEFAULT LEAFLET MARKER ICON
