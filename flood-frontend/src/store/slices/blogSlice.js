@@ -666,42 +666,35 @@ export const {
 // EXPORT SELECTORS
 // =========================================================
 
-export const selectBlogs =
-  (state) =>
-    state.blog.blogs;
+export const selectBlogs = (state) =>
+  state.blogs.blogs;
 
-export const selectBlogStats =
-  (state) =>
-    state.blog.stats;
+export const selectBlogStats = (state) =>
+  state.blogs.stats;
 
-export const selectBlogPagination =
-  (state) =>
-    state.blog.pagination;
+export const selectBlogPagination = (state) =>
+  state.blogs.pagination;
 
-export const selectBlogLoading =
-  (state) =>
-    state.blog.loading;
+export const selectBlogLoading = (state) =>
+  state.blogs.loading;
 
-export const selectBlogCreating =
-  (state) =>
-    state.blog.creating;
+export const selectBlogCreating = (state) =>
+  state.blogs.creating;
 
-export const selectBlogUpdating =
-  (state) =>
-    state.blog.updating;
+export const selectBlogUpdating = (state) =>
+  state.blogs.updating;
 
-export const selectBlogDeleting =
-  (state) =>
-    state.blog.deleting;
+export const selectBlogDeleting = (state) =>
+  state.blogs.deleting;
 
-export const selectBlogToggling =
-  (state) =>
-    state.blog.toggling;
+export const selectBlogToggling = (state) =>
+  state.blogs.toggling;
 
-export const selectBlogError =
-  (state) =>
-    state.blog.error;
+export const selectBlogError = (state) =>
+  state.blogs.error;
 
+export const selectSelectedBlog = (state) =>
+  state.blogs.selectedBlog;
 
 // =========================================================
 // EXPORT REDUCER
