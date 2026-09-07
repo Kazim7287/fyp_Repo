@@ -23,6 +23,12 @@ const nodeRoutes = require("./routes/nodeRoutes");
 
 const alertRoutes = require("./routes/alertRoutes");
 
+// ---------------------------------------------------------
+// BLOG ROUTES
+// ---------------------------------------------------------
+
+const blogRoutes = require("./routes/blog.routes");
+
 const app = express();
 
 // =========================================================
@@ -52,14 +58,19 @@ const allowedOrigins = [
 // ---------------------------------------------------------
 
 if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(
-    process.env.FRONTEND_URL
-  );
+  const frontendUrl = process.env.FRONTEND_URL.trim();
+
+  if (
+    frontendUrl &&
+    !allowedOrigins.includes(frontendUrl)
+  ) {
+    allowedOrigins.push(frontendUrl);
+  }
 }
 
-// ---------------------------------------------------------
-// CORS middleware
-// ---------------------------------------------------------
+// =========================================================
+// CORS MIDDLEWARE
+// =========================================================
 
 app.use(
   cors({
@@ -140,8 +151,7 @@ app.use(cookieParser());
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message:
-      "Flood Forecasting API is running",
+    message: "Flood Forecasting API is running",
   });
 });
 
@@ -157,10 +167,8 @@ app.get("/db-test", async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message:
-        "PostgreSQL connected successfully",
-      time:
-        result.rows[0].current_time,
+      message: "PostgreSQL connected successfully",
+      time: result.rows[0].current_time,
     });
   } catch (error) {
     console.error(
@@ -170,15 +178,23 @@ app.get("/db-test", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      message:
-        "PostgreSQL connection failed",
-      error: error.message,
+      message: "PostgreSQL connection failed",
+      error:
+        process.env.NODE_ENV === "production"
+          ? undefined
+          : error.message,
     });
   }
 });
 
 // =========================================================
 // AUTH ROUTES
+// =========================================================
+//
+// POST   /api/auth/login
+// POST   /api/auth/register
+// etc.
+//
 // =========================================================
 
 app.use(
@@ -189,6 +205,12 @@ app.use(
 // =========================================================
 // USER ROUTES
 // =========================================================
+//
+// GET    /api/users
+// GET    /api/users/:id
+// etc.
+//
+// =========================================================
 
 app.use(
   "/api/users",
@@ -197,6 +219,10 @@ app.use(
 
 // =========================================================
 // ADMIN ROUTES
+// =========================================================
+//
+// Admin-related endpoints
+//
 // =========================================================
 
 app.use(
@@ -207,6 +233,10 @@ app.use(
 // =========================================================
 // SENSOR ROUTES
 // =========================================================
+//
+// Sensor-related endpoints
+//
+// =========================================================
 
 app.use(
   "/api/sensors",
@@ -215,6 +245,10 @@ app.use(
 
 // =========================================================
 // COMPONENT LIBRARY ROUTES
+// =========================================================
+//
+// Component management endpoints
+//
 // =========================================================
 
 app.use(
@@ -225,6 +259,10 @@ app.use(
 // =========================================================
 // NODE / IOT INFRASTRUCTURE ROUTES
 // =========================================================
+//
+// IoT node management endpoints
+//
+// =========================================================
 
 app.use(
   "/api/nodes",
@@ -234,8 +272,6 @@ app.use(
 // =========================================================
 // ALERT MANAGEMENT ROUTES
 // =========================================================
-//
-// Available endpoints:
 //
 // GET    /api/alerts
 // GET    /api/alerts/:id
@@ -248,6 +284,26 @@ app.use(
 app.use(
   "/api/alerts",
   alertRoutes
+);
+
+// =========================================================
+// BLOG MANAGEMENT ROUTES
+// =========================================================
+//
+// GET    /api/blogs
+// GET    /api/blogs/stats
+// GET    /api/blogs/:id
+// POST   /api/blogs
+// PUT    /api/blogs/:id
+// DELETE /api/blogs/:id
+// PATCH  /api/blogs/:id/toggle-publish
+// PATCH  /api/blogs/:id/views
+//
+// =========================================================
+
+app.use(
+  "/api/blogs",
+  blogRoutes
 );
 
 // =========================================================
@@ -293,14 +349,22 @@ app.use(
     // General errors
     // -----------------------------------------------------
 
-    return res.status(
-      err.status || 500
-    ).json({
+    const statusCode =
+      err.status ||
+      err.statusCode ||
+      500;
+
+    return res.status(statusCode).json({
       success: false,
 
       message:
         err.message ||
         "Internal server error",
+
+      // Do not expose internal errors in production
+      ...(process.env.NODE_ENV !== "production" && {
+        stack: err.stack,
+      }),
     });
   }
 );

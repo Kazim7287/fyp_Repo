@@ -1,4 +1,9 @@
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   Card,
@@ -21,6 +26,8 @@ import {
   Badge,
   Tooltip,
   Divider,
+  Spin,
+  Empty,
 } from "antd";
 
 import {
@@ -35,85 +42,96 @@ import {
   ClockCircleOutlined,
   StarOutlined,
   PictureOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 
 import ReactQuill from "react-quill-new";
+
 import "react-quill-new/dist/quill.snow.css";
 
-const { Title, Text, Paragraph } = Typography;
+import { useDispatch, useSelector } from "react-redux";
+
+import {
+  createBlog,
+  deleteBlog,
+  fetchBlogStats,
+  fetchBlogs,
+  selectBlogCreating,
+  selectBlogDeleting,
+  selectBlogError,
+  selectBlogLoading,
+  selectBlogPagination,
+  selectBlogStats,
+  selectBlogToggling,
+  selectBlogUpdating,
+  toggleBlogPublish,
+  updateBlog,
+} from "../../../store/slices/blogSlice"
+
+const { Title, Text, Paragraph } =
+  Typography;
 
 
-/* =========================================================
-   PROTOTYPE BLOG DATA
-========================================================= */
+// =========================================================
+// CONSTANTS
+// =========================================================
 
-const initialPosts = [
-  {
-    id: 1,
-    title: "Flood Safety",
-    category: "Flood Awareness",
-    status: "Published",
-    featured: true,
-    date: "2026-08-18",
-    views: 1248,
-    excerpt:
-      "Important flood safety instructions and preparedness guidelines.",
-    content:
-      "<h2>Flood Safety</h2><p>Follow official warnings and move to safe areas when instructed.</p>",
-    image: null,
-  },
+const BLOG_CATEGORIES = [
+  "Flood Awareness",
+  "Technology",
+  "Research",
+  "Safety",
+];
 
-  {
-    id: 2,
-    title: "AI Forecasting",
-    category: "Technology",
-    status: "Draft",
-    featured: false,
-    date: "2026-08-15",
-    views: 0,
-    excerpt:
-      "Understanding how AI models can support flood forecasting.",
-    content:
-      "<h2>AI Flood Forecasting</h2><p>Machine learning can support flood prediction using historical and environmental data.</p>",
-    image: null,
-  },
-
-  {
-    id: 3,
-    title: "2010 Flood Study",
-    category: "Research",
-    status: "Published",
-    featured: false,
-    date: "2026-08-10",
-    views: 2145,
-    excerpt:
-      "Research analysis of historical flood events and their impacts.",
-    content:
-      "<h2>2010 Flood Study</h2><p>This study examines historical flood patterns and their consequences.</p>",
-    image: null,
-  },
+const BLOG_STATUSES = [
+  "Published",
+  "Draft",
 ];
 
 
-/* =========================================================
-   RICH TEXT EDITOR
-========================================================= */
+// =========================================================
+// RICH TEXT EDITOR
+// =========================================================
 
 const quillModules = {
   toolbar: [
     [{ header: [1, 2, 3, false] }],
 
-    ["bold", "italic", "underline", "strike"],
+    [
+      "bold",
+      "italic",
+      "underline",
+      "strike",
+    ],
 
-    [{ list: "ordered" }, { list: "bullet" }],
+    [
+      {
+        list: "ordered",
+      },
+      {
+        list: "bullet",
+      },
+    ],
 
-    [{ align: [] }],
+    [
+      {
+        align: [],
+      },
+    ],
 
-    ["blockquote", "code-block"],
+    [
+      "blockquote",
+      "code-block",
+    ],
 
-    ["link", "image"],
+    [
+      "link",
+      "image",
+    ],
 
-    ["clean"],
+    [
+      "clean",
+    ],
   ],
 };
 
@@ -133,20 +151,109 @@ const quillFormats = [
 ];
 
 
-/* =========================================================
-   COMPONENT
-========================================================= */
+// =========================================================
+// IMAGE URL HELPER
+// =========================================================
+
+const getImageUrl = (imageUrl) => {
+
+  if (!imageUrl) {
+    return null;
+  }
+
+  // Already a complete URL
+  if (
+    imageUrl.startsWith(
+      "http://"
+    ) ||
+    imageUrl.startsWith(
+      "https://"
+    )
+  ) {
+    return imageUrl;
+  }
+
+  const apiUrl =
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:5000/api";
+
+  const backendUrl =
+    apiUrl.replace(
+      /\/api\/?$/,
+      ""
+    );
+
+  return `${backendUrl}${imageUrl}`;
+};
+
+
+// =========================================================
+// COMPONENT
+// =========================================================
 
 const Blog = () => {
-  const [posts, setPosts] = useState(initialPosts);
 
-  const [search, setSearch] = useState("");
+  const dispatch = useDispatch();
+
+  // =======================================================
+  // REDUX
+  // =======================================================
+
+  const blogs = useSelector(
+    selectBlogs
+  );
+
+  const stats = useSelector(
+    selectBlogStats
+  );
+
+  const pagination = useSelector(
+    selectBlogPagination
+  );
+
+  const loading = useSelector(
+    selectBlogLoading
+  );
+
+  const creating = useSelector(
+    selectBlogCreating
+  );
+
+  const updating = useSelector(
+    selectBlogUpdating
+  );
+
+  const deleting = useSelector(
+    selectBlogDeleting
+  );
+
+  const toggling = useSelector(
+    selectBlogToggling
+  );
+
+  const error = useSelector(
+    selectBlogError
+  );
+
+
+  // =======================================================
+  // LOCAL UI STATE
+  // =======================================================
+
+  const [search, setSearch] =
+    useState("");
 
   const [statusFilter, setStatusFilter] =
     useState("all");
 
   const [categoryFilter, setCategoryFilter] =
     useState("all");
+
+  const [currentPage, setCurrentPage] =
+    useState(1);
+
+  const [pageSize, setPageSize] =
+    useState(8);
 
   const [modalOpen, setModalOpen] =
     useState(false);
@@ -160,72 +267,80 @@ const Blog = () => {
   const [previewPost, setPreviewPost] =
     useState(null);
 
-  const [form] = Form.useForm();
+  const [form] =
+    Form.useForm();
 
 
-  /* =========================================================
-     STATISTICS
-  ========================================================= */
+  // =======================================================
+  // LOAD BLOGS
+  // =======================================================
 
-  const totalPosts = posts.length;
+  const loadBlogs =
+    useCallback(() => {
 
-  const publishedPosts = posts.filter(
-    (post) => post.status === "Published"
-  ).length;
-
-  const draftPosts = posts.filter(
-    (post) => post.status === "Draft"
-  ).length;
-
-  const featuredPosts = posts.filter(
-    (post) => post.featured
-  ).length;
-
-
-  /* =========================================================
-     FILTER POSTS
-  ========================================================= */
-
-  const filteredPosts = useMemo(() => {
-    return posts.filter((post) => {
-      const query =
-        search.toLowerCase().trim();
-
-      const matchesSearch =
-        post.title
-          .toLowerCase()
-          .includes(query) ||
-        post.category
-          .toLowerCase()
-          .includes(query);
-
-      const matchesStatus =
-        statusFilter === "all" ||
-        post.status === statusFilter;
-
-      const matchesCategory =
-        categoryFilter === "all" ||
-        post.category === categoryFilter;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesCategory
+      dispatch(
+        fetchBlogs({
+          search,
+          status: statusFilter,
+          category: categoryFilter,
+          page: currentPage,
+          limit: pageSize,
+        })
       );
-    });
-  }, [
-    posts,
-    search,
-    statusFilter,
-    categoryFilter,
-  ]);
+
+    }, [
+      dispatch,
+      search,
+      statusFilter,
+      categoryFilter,
+      currentPage,
+      pageSize,
+    ]);
 
 
-  /* =========================================================
-     CREATE BLOG
-  ========================================================= */
+  // =======================================================
+  // INITIAL LOAD
+  // =======================================================
+
+  useEffect(() => {
+
+    loadBlogs();
+
+  }, [loadBlogs]);
+
+
+  // =======================================================
+  // LOAD STATISTICS
+  // =======================================================
+
+  useEffect(() => {
+
+    dispatch(
+      fetchBlogStats()
+    );
+
+  }, [dispatch]);
+
+
+  // =======================================================
+  // SHOW API ERROR
+  // =======================================================
+
+  useEffect(() => {
+
+    if (error) {
+      message.error(error);
+    }
+
+  }, [error]);
+
+
+  // =======================================================
+  // CREATE
+  // =======================================================
 
   const handleCreate = () => {
+
     setEditingPost(null);
 
     form.resetFields();
@@ -241,20 +356,33 @@ const Blog = () => {
   };
 
 
-  /* =========================================================
-     EDIT BLOG
-  ========================================================= */
+  // =======================================================
+  // EDIT
+  // =======================================================
 
   const handleEdit = (post) => {
+
     setEditingPost(post);
 
     form.setFieldsValue({
-      title: post.title,
-      category: post.category,
-      status: post.status,
-      featured: post.featured,
-      excerpt: post.excerpt,
-      content: post.content,
+      title:
+        post.title,
+
+      category:
+        post.category,
+
+      status:
+        post.status,
+
+      featured:
+        Boolean(post.featured),
+
+      excerpt:
+        post.excerpt,
+
+      content:
+        post.content,
+
       image: [],
     });
 
@@ -262,11 +390,12 @@ const Blog = () => {
   };
 
 
-  /* =========================================================
-     CLOSE MODAL
-  ========================================================= */
+  // =======================================================
+  // CLOSE MODAL
+  // =======================================================
 
   const closeModal = () => {
+
     setModalOpen(false);
 
     form.resetFields();
@@ -275,88 +404,46 @@ const Blog = () => {
   };
 
 
-  /* =========================================================
-     SAVE BLOG
-  ========================================================= */
+  // =======================================================
+  // SAVE BLOG
+  // =======================================================
 
-  const handleSave = async (forcedStatus = null) => {
-    try {
-      const values =
-        await form.validateFields();
+  const handleSave =
+    async (
+      forcedStatus = null
+    ) => {
 
-      const finalStatus =
-        forcedStatus || values.status;
+      try {
 
-      const imageFile =
-        values.image?.[0]?.originFileObj ||
-        null;
+        const values =
+          await form.validateFields();
 
+        const finalStatus =
+          forcedStatus ||
+          values.status ||
+          "Draft";
 
-      /* =====================================================
-         UPDATE EXISTING BLOG
-      ===================================================== */
-
-      if (editingPost) {
-        setPosts((currentPosts) =>
-          currentPosts.map((post) =>
-            post.id === editingPost.id
-              ? {
-                  ...post,
-
-                  title: values.title,
-
-                  category:
-                    values.category,
-
-                  status: finalStatus,
-
-                  featured:
-                    values.featured || false,
-
-                  excerpt:
-                    values.excerpt,
-
-                  content:
-                    values.content,
-
-                  image:
-                    imageFile || post.image,
-                }
-              : post
-          )
-        );
-
-        message.success(
-          finalStatus === "Published"
-            ? "Blog published successfully."
-            : "Draft saved successfully."
-        );
-      }
+        const imageFile =
+          values.image?.[0]
+            ?.originFileObj ||
+          null;
 
 
-      /* =====================================================
-         CREATE NEW BLOG
-      ===================================================== */
+        const blogData = {
 
-      else {
-        const newPost = {
-          id: Date.now(),
-
-          title: values.title,
+          title:
+            values.title,
 
           category:
             values.category,
 
-          status: finalStatus,
+          status:
+            finalStatus,
 
           featured:
-            values.featured || false,
-
-          date: new Date()
-            .toISOString()
-            .split("T")[0],
-
-          views: 0,
+            Boolean(
+              values.featured
+            ),
 
           excerpt:
             values.excerpt,
@@ -364,106 +451,265 @@ const Blog = () => {
           content:
             values.content,
 
-          image: imageFile,
+          image:
+            imageFile,
         };
 
-        setPosts((currentPosts) => [
-          newPost,
-          ...currentPosts,
-        ]);
+
+        // =================================================
+        // UPDATE
+        // =================================================
+
+        if (editingPost) {
+
+          const result =
+            await dispatch(
+              updateBlog({
+                id:
+                  editingPost.id,
+
+                data:
+                  blogData,
+              })
+            ).unwrap();
+
+          message.success(
+            finalStatus ===
+              "Published"
+              ? "Blog published successfully."
+              : "Draft saved successfully."
+          );
+
+        }
+
+
+        // =================================================
+        // CREATE
+        // =================================================
+
+        else {
+
+          await dispatch(
+            createBlog(
+              blogData
+            )
+          ).unwrap();
+
+          message.success(
+            finalStatus ===
+              "Published"
+              ? "Blog published successfully."
+              : "Draft saved successfully."
+          );
+        }
+
+
+        closeModal();
+
+        // Refresh table
+        loadBlogs();
+
+        // Refresh statistics
+        dispatch(
+          fetchBlogStats()
+        );
+
+      } catch (error) {
+
+        // Ant Design validation errors
+        // are already displayed automatically.
+
+        if (
+          typeof error ===
+          "string"
+        ) {
+          message.error(error);
+        }
+      }
+    };
+
+
+  // =======================================================
+  // DELETE
+  // =======================================================
+
+  const handleDelete =
+    async (id) => {
+
+      try {
+
+        await dispatch(
+          deleteBlog(id)
+        ).unwrap();
 
         message.success(
-          finalStatus === "Published"
-            ? "Blog published successfully."
-            : "Draft saved successfully."
+          "Blog deleted successfully."
+        );
+
+        loadBlogs();
+
+        dispatch(
+          fetchBlogStats()
+        );
+
+      } catch (error) {
+
+        message.error(
+          typeof error ===
+            "string"
+            ? error
+            : "Failed to delete blog."
         );
       }
-
-      closeModal();
-
-    } catch (error) {
-      // Ant Design validation handles errors.
-    }
-  };
+    };
 
 
-  /* =========================================================
-     DELETE BLOG
-  ========================================================= */
+  // =======================================================
+  // TOGGLE PUBLISH
+  // =======================================================
 
-  const handleDelete = (id) => {
-    setPosts((currentPosts) =>
-      currentPosts.filter(
-        (post) => post.id !== id
-      )
-    );
+  const handleTogglePublish =
+    async (post) => {
 
-    message.success(
-      "Blog deleted successfully."
-    );
-  };
+      try {
 
+        await dispatch(
+          toggleBlogPublish(
+            post.id
+          )
+        ).unwrap();
 
-  /* =========================================================
-     PUBLISH / MOVE TO DRAFT
-  ========================================================= */
+        const newStatus =
+          post.status ===
+          "Published"
+            ? "Draft"
+            : "Published";
 
-  const handleTogglePublish = (post) => {
-    const newStatus =
-      post.status === "Published"
-        ? "Draft"
-        : "Published";
+        message.success(
+          newStatus ===
+            "Published"
+            ? "Blog published successfully."
+            : "Blog moved to draft."
+        );
 
-    setPosts((currentPosts) =>
-      currentPosts.map((item) =>
-        item.id === post.id
-          ? {
-              ...item,
-              status: newStatus,
-            }
-          : item
-      )
-    );
+        loadBlogs();
 
-    message.success(
-      newStatus === "Published"
-        ? "Blog published successfully."
-        : "Blog moved to draft."
-    );
-  };
+        dispatch(
+          fetchBlogStats()
+        );
 
+      } catch (error) {
 
-  /* =========================================================
-     PREVIEW
-  ========================================================= */
-
-  const handlePreview = (post) => {
-    setPreviewPost(post);
-
-    setPreviewOpen(true);
-  };
+        message.error(
+          typeof error ===
+            "string"
+            ? error
+            : "Failed to update blog status."
+        );
+      }
+    };
 
 
-  /* =========================================================
-     IMAGE UPLOAD
-  ========================================================= */
+  // =======================================================
+  // PREVIEW
+  // =======================================================
+
+  const handlePreview =
+    (post) => {
+
+      setPreviewPost(post);
+
+      setPreviewOpen(true);
+    };
+
+
+  // =======================================================
+  // SEARCH
+  // =======================================================
+
+  const handleSearch =
+    (event) => {
+
+      setSearch(
+        event.target.value
+      );
+
+      setCurrentPage(1);
+    };
+
+
+  // =======================================================
+  // STATUS FILTER
+  // =======================================================
+
+  const handleStatusChange =
+    (value) => {
+
+      setStatusFilter(value);
+
+      setCurrentPage(1);
+    };
+
+
+  // =======================================================
+  // CATEGORY FILTER
+  // =======================================================
+
+  const handleCategoryChange =
+    (value) => {
+
+      setCategoryFilter(value);
+
+      setCurrentPage(1);
+    };
+
+
+  // =======================================================
+  // TABLE DATA
+  // =======================================================
+
+  const tableData =
+    useMemo(() => {
+
+      return blogs.map(
+        (post) => ({
+          ...post,
+
+          key:
+            post.id,
+        })
+      );
+
+    }, [blogs]);
+
+
+  // =======================================================
+  // UPLOAD CONFIGURATION
+  // =======================================================
 
   const uploadProps = {
+
     beforeUpload: () => false,
 
     maxCount: 1,
 
-    accept: "image/*",
+    accept: "image/jpeg,image/png,image/webp,image/gif",
 
     listType: "picture-card",
+
   };
 
 
-  /* =========================================================
-     TABLE
-  ========================================================= */
+  // =======================================================
+  // TABLE COLUMNS
+  // =======================================================
 
   const columns = [
+
+    // -----------------------------------------------------
+    // TITLE
+    // -----------------------------------------------------
+
     {
       title: "Title",
 
@@ -471,21 +717,53 @@ const Blog = () => {
 
       key: "title",
 
-      render: (title, record) => (
+      render: (
+        title,
+        record
+      ) => (
+
         <Space>
+
           {record.featured && (
             <Tooltip title="Featured Blog">
+
               <StarOutlined />
+
             </Tooltip>
           )}
 
           <Text strong>
             {title}
           </Text>
+
         </Space>
       ),
     },
 
+
+    // -----------------------------------------------------
+    // CATEGORY
+    // -----------------------------------------------------
+
+    {
+      title: "Category",
+
+      dataIndex: "category",
+
+      key: "category",
+
+      render: (category) => (
+
+        <Tag color="blue">
+          {category}
+        </Tag>
+      ),
+    },
+
+
+    // -----------------------------------------------------
+    // STATUS
+    // -----------------------------------------------------
 
     {
       title: "Status",
@@ -495,16 +773,20 @@ const Blog = () => {
       key: "status",
 
       render: (status) => (
+
         <Tag
           icon={
-            status === "Published" ? (
+            status ===
+            "Published" ? (
               <CheckCircleOutlined />
             ) : (
               <ClockCircleOutlined />
             )
           }
+
           color={
-            status === "Published"
+            status ===
+            "Published"
               ? "success"
               : "default"
           }
@@ -515,37 +797,106 @@ const Blog = () => {
     },
 
 
+    // -----------------------------------------------------
+    // VIEWS
+    // -----------------------------------------------------
+
+    {
+      title: "Views",
+
+      dataIndex: "views",
+
+      key: "views",
+
+      render: (views) =>
+        Number(views || 0).toLocaleString(),
+    },
+
+
+    // -----------------------------------------------------
+    // DATE
+    // -----------------------------------------------------
+
+    {
+      title: "Date",
+
+      dataIndex: "created_at",
+
+      key: "created_at",
+
+      render: (
+        date,
+        record
+      ) => {
+
+        const blogDate =
+          date ||
+          record.date;
+
+        if (!blogDate) {
+          return "-";
+        }
+
+        return new Date(
+          blogDate
+        ).toLocaleDateString();
+      },
+    },
+
+
+    // -----------------------------------------------------
+    // ACTIONS
+    // -----------------------------------------------------
+
     {
       title: "Action",
 
       key: "action",
 
-      render: (_, record) => (
+      fixed: "right",
+
+      render: (
+        _,
+        record
+      ) => (
+
         <Space>
 
-          {/* PREVIEW */}
+          {/* VIEW */}
 
           <Tooltip title="View">
+
             <Button
               type="text"
-              icon={<EyeOutlined />}
+              icon={
+                <EyeOutlined />
+              }
               onClick={() =>
-                handlePreview(record)
+                handlePreview(
+                  record
+                )
               }
             />
+
           </Tooltip>
 
 
           {/* EDIT */}
 
           <Tooltip title="Edit">
+
             <Button
               type="text"
-              icon={<EditOutlined />}
+              icon={
+                <EditOutlined />
+              }
               onClick={() =>
-                handleEdit(record)
+                handleEdit(
+                  record
+                )
               }
             />
+
           </Tooltip>
 
 
@@ -559,8 +910,14 @@ const Blog = () => {
                 : "Publish"
             }
           >
+
             <Button
               type="text"
+
+              loading={
+                toggling
+              }
+
               icon={
                 record.status ===
                 "Published" ? (
@@ -569,10 +926,14 @@ const Blog = () => {
                   <SendOutlined />
                 )
               }
+
               onClick={() =>
-                handleTogglePublish(record)
+                handleTogglePublish(
+                  record
+                )
               }
             />
+
           </Tooltip>
 
 
@@ -580,17 +941,26 @@ const Blog = () => {
 
           <Popconfirm
             title="Delete this blog?"
+
             description="This action cannot be undone."
+
             okText="Delete"
+
             cancelText="Cancel"
+
             okButtonProps={{
               danger: true,
             }}
+
             onConfirm={() =>
-              handleDelete(record.id)
+              handleDelete(
+                record.id
+              )
             }
           >
+
             <Tooltip title="Delete">
+
               <Button
                 type="text"
                 danger
@@ -598,7 +968,9 @@ const Blog = () => {
                   <DeleteOutlined />
                 }
               />
+
             </Tooltip>
+
           </Popconfirm>
 
         </Space>
@@ -607,24 +979,28 @@ const Blog = () => {
   ];
 
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
+  // =======================================================
+  // RENDER
+  // =======================================================
 
   return (
+
     <div>
 
-      {/* =====================================================
+      {/* ===================================================
           HEADER
-      ===================================================== */}
+      =================================================== */}
 
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          justifyContent:
+            "space-between",
+          alignItems:
+            "center",
           gap: 16,
-          flexWrap: "wrap",
+          flexWrap:
+            "wrap",
           marginBottom: 24,
         }}
       >
@@ -651,8 +1027,12 @@ const Blog = () => {
         <Button
           type="primary"
           size="large"
-          icon={<PlusOutlined />}
-          onClick={handleCreate}
+          icon={
+            <PlusOutlined />
+          }
+          onClick={
+            handleCreate
+          }
         >
           Create New Blog
         </Button>
@@ -660,12 +1040,15 @@ const Blog = () => {
       </div>
 
 
-      {/* =====================================================
+      {/* ===================================================
           STATISTICS
-      ===================================================== */}
+      =================================================== */}
 
       <Row
-        gutter={[16, 16]}
+        gutter={[
+          16,
+          16,
+        ]}
         style={{
           marginBottom: 24,
         }}
@@ -676,15 +1059,21 @@ const Blog = () => {
           sm={12}
           lg={6}
         >
+
           <Card>
+
             <Statistic
               title="Total Blogs"
-              value={totalPosts}
+              value={
+                stats.total
+              }
               prefix={
                 <FileTextOutlined />
               }
             />
+
           </Card>
+
         </Col>
 
 
@@ -693,15 +1082,21 @@ const Blog = () => {
           sm={12}
           lg={6}
         >
+
           <Card>
+
             <Statistic
               title="Published"
-              value={publishedPosts}
+              value={
+                stats.published
+              }
               prefix={
                 <CheckCircleOutlined />
               }
             />
+
           </Card>
+
         </Col>
 
 
@@ -710,15 +1105,21 @@ const Blog = () => {
           sm={12}
           lg={6}
         >
+
           <Card>
+
             <Statistic
               title="Drafts"
-              value={draftPosts}
+              value={
+                stats.drafts
+              }
               prefix={
                 <ClockCircleOutlined />
               }
             />
+
           </Card>
+
         </Col>
 
 
@@ -727,40 +1128,73 @@ const Blog = () => {
           sm={12}
           lg={6}
         >
+
           <Card>
+
             <Statistic
               title="Featured"
-              value={featuredPosts}
+              value={
+                stats.featured
+              }
               prefix={
                 <StarOutlined />
               }
             />
+
           </Card>
+
         </Col>
 
       </Row>
 
 
-      {/* =====================================================
+      {/* ===================================================
           BLOG LIST
-      ===================================================== */}
+      =================================================== */}
 
       <Card
         title={
           <Space>
-            <Badge status="processing" />
+
+            <Badge
+              status="processing"
+            />
 
             <span>
               Blog Articles
             </span>
+
           </Space>
+        }
+
+        extra={
+
+          <Button
+            icon={
+              <ReloadOutlined />
+            }
+            onClick={() => {
+              loadBlogs();
+
+              dispatch(
+                fetchBlogStats()
+              );
+            }}
+          >
+            Refresh
+          </Button>
         }
       >
 
-        {/* SEARCH */}
+        {/* =================================================
+            FILTERS
+        ================================================= */}
 
         <Row
-          gutter={[12, 12]}
+          gutter={[
+            12,
+            12,
+          ]}
           style={{
             marginBottom: 20,
           }}
@@ -770,20 +1204,26 @@ const Blog = () => {
             xs={24}
             md={12}
           >
+
             <Input
               size="large"
               allowClear
+
               prefix={
                 <SearchOutlined />
               }
+
               placeholder="Search blogs..."
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
-                )
+
+              value={
+                search
+              }
+
+              onChange={
+                handleSearch
               }
             />
+
           </Col>
 
 
@@ -792,32 +1232,43 @@ const Blog = () => {
             sm={12}
             md={6}
           >
+
             <Select
               size="large"
+
               style={{
                 width: "100%",
               }}
-              value={statusFilter}
-              onChange={
-                setStatusFilter
+
+              value={
+                statusFilter
               }
+
+              onChange={
+                handleStatusChange
+              }
+
               options={[
                 {
-                  value: "all",
+                  value:
+                    "all",
+
                   label:
                     "All Statuses",
                 },
-                {
-                  value: "Published",
-                  label:
-                    "Published",
-                },
-                {
-                  value: "Draft",
-                  label: "Draft",
-                },
+
+                ...BLOG_STATUSES.map(
+                  (status) => ({
+                    value:
+                      status,
+
+                    label:
+                      status,
+                  })
+                ),
               ]}
             />
+
           </Col>
 
 
@@ -826,86 +1277,159 @@ const Blog = () => {
             sm={12}
             md={6}
           >
+
             <Select
               size="large"
+
               style={{
                 width: "100%",
               }}
-              value={categoryFilter}
-              onChange={
-                setCategoryFilter
+
+              value={
+                categoryFilter
               }
+
+              onChange={
+                handleCategoryChange
+              }
+
               options={[
                 {
-                  value: "all",
+                  value:
+                    "all",
+
                   label:
                     "All Categories",
                 },
-                {
-                  value:
-                    "Flood Awareness",
-                  label:
-                    "Flood Awareness",
-                },
-                {
-                  value:
-                    "Technology",
-                  label:
-                    "Technology",
-                },
-                {
-                  value:
-                    "Research",
-                  label:
-                    "Research",
-                },
-                {
-                  value: "Safety",
-                  label: "Safety",
-                },
+
+                ...BLOG_CATEGORIES.map(
+                  (category) => ({
+                    value:
+                      category,
+
+                    label:
+                      category,
+                  })
+                ),
               ]}
             />
+
           </Col>
 
         </Row>
 
 
-        {/* TABLE */}
+        {/* =================================================
+            TABLE
+        ================================================= */}
 
         <Table
           rowKey="id"
-          columns={columns}
-          dataSource={
-            filteredPosts
+
+          columns={
+            columns
           }
-          pagination={{
-            pageSize: 8,
-            showSizeChanger: true,
-            showTotal: (total) =>
-              `Total ${total} blogs`,
+
+          dataSource={
+            tableData
+          }
+
+          loading={
+            loading
+          }
+
+          locale={{
+            emptyText: (
+              <Empty
+                description="No blogs found"
+              />
+            ),
           }}
+
+          pagination={{
+            current:
+              pagination.page ||
+              currentPage,
+
+            pageSize:
+              pagination.limit ||
+              pageSize,
+
+            total:
+              pagination.total ||
+              0,
+
+            showSizeChanger:
+              true,
+
+            pageSizeOptions: [
+              8,
+              16,
+              24,
+              50,
+            ],
+
+            showTotal:
+              (total) =>
+                `Total ${total} blogs`,
+
+            onChange: (
+              page,
+              size
+            ) => {
+
+              setCurrentPage(
+                page
+              );
+
+              if (
+                size !==
+                pageSize
+              ) {
+
+                setPageSize(
+                  size
+                );
+
+                setCurrentPage(
+                  1
+                );
+              }
+            },
+          }}
+
           scroll={{
-            x: 700,
+            x: 1000,
           }}
         />
 
       </Card>
 
 
-      {/* =====================================================
+      {/* ===================================================
           CREATE / EDIT MODAL
-      ===================================================== */}
+      =================================================== */}
 
       <Modal
+
         title={
           editingPost
             ? "Edit Blog"
             : "Create New Blog"
         }
-        open={modalOpen}
-        onCancel={closeModal}
+
+        open={
+          modalOpen
+        }
+
+        onCancel={
+          closeModal
+        }
+
         footer={null}
+
         width={850}
+
         destroyOnHidden
       >
 
@@ -921,18 +1445,33 @@ const Blog = () => {
           <Form.Item
             label="Title"
             name="title"
+
             rules={[
               {
-                required: true,
+                required:
+                  true,
+
                 message:
                   "Please enter the blog title.",
               },
+
+              {
+                max:
+                  255,
+
+                message:
+                  "Title cannot exceed 255 characters.",
+              },
             ]}
           >
+
             <Input
               size="large"
               placeholder="Enter blog title"
+              showCount
+              maxLength={255}
             />
+
           </Form.Item>
 
 
@@ -943,60 +1482,61 @@ const Blog = () => {
           <Form.Item
             label="Category"
             name="category"
+
             rules={[
               {
-                required: true,
+                required:
+                  true,
+
                 message:
                   "Please select a category.",
               },
             ]}
           >
+
             <Select
               size="large"
               placeholder="Select category"
-              options={[
-                {
-                  value:
-                    "Flood Awareness",
-                  label:
-                    "Flood Awareness",
-                },
-                {
-                  value:
-                    "Technology",
-                  label:
-                    "Technology",
-                },
-                {
-                  value:
-                    "Research",
-                  label:
-                    "Research",
-                },
-                {
-                  value: "Safety",
-                  label: "Safety",
-                },
-              ]}
+
+              options={
+                BLOG_CATEGORIES.map(
+                  (category) => ({
+                    value:
+                      category,
+
+                    label:
+                      category,
+                  })
+                )
+              }
             />
+
           </Form.Item>
 
 
           {/* =================================================
-              FEATURED IMAGE
+              IMAGE
           ================================================= */}
 
           <Form.Item
             label="Featured Image"
+
             name="image"
+
             valuePropName="fileList"
-            getValueFromEvent={(event) =>
-              event?.fileList || []
+
+            getValueFromEvent={(
+              event
+            ) =>
+              event?.fileList ||
+              []
             }
           >
+
             <Upload
               {...uploadProps}
             >
+
               <div>
 
                 <PictureOutlined
@@ -1014,101 +1554,132 @@ const Blog = () => {
                 </div>
 
               </div>
+
             </Upload>
+
           </Form.Item>
 
 
           {/* =================================================
-              SHORT DESCRIPTION
+              EXCERPT
           ================================================= */}
 
           <Form.Item
             label="Short Description"
             name="excerpt"
+
             rules={[
               {
-                required: true,
+                required:
+                  true,
+
                 message:
                   "Please enter a short description.",
               },
             ]}
           >
+
             <Input.TextArea
               rows={4}
               showCount
               maxLength={300}
               placeholder="Enter a short description..."
             />
+
           </Form.Item>
 
 
           {/* =================================================
-              RICH TEXT CONTENT
+              CONTENT
           ================================================= */}
 
           <Form.Item
             label="Content"
             name="content"
+
             rules={[
               {
-                required: true,
+                required:
+                  true,
+
                 message:
                   "Please enter blog content.",
               },
             ]}
           >
+
             <ReactQuill
               theme="snow"
-              modules={quillModules}
-              formats={quillFormats}
+
+              modules={
+                quillModules
+              }
+
+              formats={
+                quillFormats
+              }
+
               placeholder="Write your blog article here..."
+
               style={{
                 minHeight: 280,
                 marginBottom: 45,
               }}
             />
+
           </Form.Item>
 
 
           {/* =================================================
-              PUBLICATION STATUS
+              STATUS
           ================================================= */}
 
           <Form.Item
             label="Publication Status"
             name="status"
           >
+
             <Select
               size="large"
+
               options={[
                 {
-                  value: "Draft",
-                  label: "Draft",
+                  value:
+                    "Draft",
+
+                  label:
+                    "Draft",
                 },
+
                 {
                   value:
                     "Published",
+
                   label:
                     "Published",
                 },
               ]}
             />
+
           </Form.Item>
 
 
           {/* =================================================
-              FEATURED BLOG
+              FEATURED
           ================================================= */}
 
           <Form.Item
             label="Featured Blog"
             name="featured"
+
             valuePropName="checked"
           >
+
             <Switch
               checkedChildren="Yes"
               unCheckedChildren="No"
             />
+
           </Form.Item>
 
 
@@ -1121,15 +1692,23 @@ const Blog = () => {
 
           <div
             style={{
-              display: "flex",
-              justifyContent: "flex-end",
+              display:
+                "flex",
+
+              justifyContent:
+                "flex-end",
+
               gap: 12,
-              flexWrap: "wrap",
+
+              flexWrap:
+                "wrap",
             }}
           >
 
             <Button
-              onClick={closeModal}
+              onClick={
+                closeModal
+              }
             >
               Cancel
             </Button>
@@ -1139,8 +1718,16 @@ const Blog = () => {
               icon={
                 <ClockCircleOutlined />
               }
+
+              loading={
+                creating ||
+                updating
+              }
+
               onClick={() =>
-                handleSave("Draft")
+                handleSave(
+                  "Draft"
+                )
               }
             >
               Save Draft
@@ -1149,9 +1736,16 @@ const Blog = () => {
 
             <Button
               type="primary"
+
               icon={
                 <SendOutlined />
               }
+
+              loading={
+                creating ||
+                updating
+              }
+
               onClick={() =>
                 handleSave(
                   "Published"
@@ -1168,31 +1762,82 @@ const Blog = () => {
       </Modal>
 
 
-      {/* =====================================================
-          BLOG PREVIEW
-      ===================================================== */}
+      {/* ===================================================
+          PREVIEW MODAL
+      =================================================== */}
 
       <Modal
+
         title="Blog Preview"
-        open={previewOpen}
-        onCancel={() =>
-          setPreviewOpen(false)
+
+        open={
+          previewOpen
         }
+
+        onCancel={() =>
+          setPreviewOpen(
+            false
+          )
+        }
+
         footer={null}
+
         width={850}
       >
 
-        {previewPost && (
+        {previewPost ? (
+
           <div>
+
+            {/* IMAGE */}
+
+            {previewPost.image_url && (
+
+              <img
+                src={
+                  getImageUrl(
+                    previewPost.image_url
+                  )
+                }
+
+                alt={
+                  previewPost.title
+                }
+
+                style={{
+                  width:
+                    "100%",
+
+                  maxHeight:
+                    400,
+
+                  objectFit:
+                    "cover",
+
+                  borderRadius:
+                    8,
+
+                  marginBottom:
+                    20,
+                }}
+              />
+
+            )}
+
+
+            {/* CATEGORY */}
 
             <Space
               style={{
-                marginBottom: 12,
+                marginBottom:
+                  12,
               }}
             >
 
               <Tag color="blue">
-                {previewPost.category}
+                {
+                  previewPost.category
+                }
               </Tag>
 
               <Tag
@@ -1203,41 +1848,81 @@ const Blog = () => {
                     : "default"
                 }
               >
-                {previewPost.status}
+                {
+                  previewPost.status
+                }
               </Tag>
 
             </Space>
 
 
+            {/* TITLE */}
+
             <Title level={2}>
-              {previewPost.title}
+              {
+                previewPost.title
+              }
             </Title>
 
 
-            <Text type="secondary">
-              {previewPost.date}
-            </Text>
+            {/* DATE / VIEWS */}
+
+            <Space>
+
+              <Text type="secondary">
+                {previewPost.created_at
+                  ? new Date(
+                      previewPost.created_at
+                    ).toLocaleDateString()
+                  : "-"}
+              </Text>
+
+              <Text type="secondary">
+                •
+              </Text>
+
+              <Text type="secondary">
+                {Number(
+                  previewPost.views ||
+                  0
+                ).toLocaleString()}{" "}
+                views
+              </Text>
+
+            </Space>
 
 
             <Divider />
 
 
-            <Paragraph>
-              {previewPost.excerpt}
+            {/* EXCERPT */}
+
+            <Paragraph strong>
+              {
+                previewPost.excerpt
+              }
             </Paragraph>
 
 
             <Divider />
 
 
+            {/* CONTENT */}
+
             <div
               dangerouslySetInnerHTML={{
                 __html:
-                  previewPost.content,
+                  previewPost.content ||
+                  "",
               }}
             />
 
           </div>
+
+        ) : (
+
+          <Spin />
+
         )}
 
       </Modal>
