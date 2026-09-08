@@ -1,35 +1,16 @@
 import axios from "axios";
 
 // =========================================================
-// API CONFIGURATION
-// =========================================================
-//
-// Development:
-// VITE_API_URL=http://localhost:5000/api
-//
-// Production:
-// VITE_API_URL=/api
-//
-// If VITE_API_URL is not defined, use /api.
-// This is important for production because Nginx proxies
-// /api requests to the Node.js backend.
-//
-
-const API_URL =
-  import.meta.env.VITE_API_URL || "/api";
-
-
-// =========================================================
-// AXIOS INSTANCE
+// AXIOS API INSTANCE
 // =========================================================
 
 const blogApi = axios.create({
-  baseURL: API_URL,
+  baseURL: "/api",
 
-  // Required because your authentication uses cookies/JWT.
   withCredentials: true,
 
   headers: {
+    "Content-Type": "application/json",
     Accept: "application/json",
   },
 });
@@ -51,25 +32,13 @@ export const getBlogsApi = async ({
     limit,
   };
 
-  // -------------------------------------------------------
-  // SEARCH
-  // -------------------------------------------------------
-
   if (search?.trim()) {
     params.search = search.trim();
   }
 
-  // -------------------------------------------------------
-  // STATUS FILTER
-  // -------------------------------------------------------
-
   if (status && status !== "all") {
     params.status = status;
   }
-
-  // -------------------------------------------------------
-  // CATEGORY FILTER
-  // -------------------------------------------------------
 
   if (category && category !== "all") {
     params.category = category;
@@ -88,13 +57,7 @@ export const getBlogsApi = async ({
 // =========================================================
 
 export const getBlogApi = async (id) => {
-  if (!id) {
-    throw new Error("Blog ID is required");
-  }
-
-  const response = await blogApi.get(
-    `/blogs/${id}`
-  );
+  const response = await blogApi.get(`/blogs/${id}`);
 
   return response.data;
 };
@@ -105,9 +68,7 @@ export const getBlogApi = async (id) => {
 // =========================================================
 
 export const getBlogStatsApi = async () => {
-  const response = await blogApi.get(
-    "/blogs/stats"
-  );
+  const response = await blogApi.get("/blogs/stats");
 
   return response.data;
 };
@@ -117,63 +78,22 @@ export const getBlogStatsApi = async () => {
 // CREATE BLOG
 // =========================================================
 
-export const createBlogApi = async (blogData = {}) => {
+export const createBlogApi = async (blogData) => {
   const formData = new FormData();
 
-  // -------------------------------------------------------
-  // TEXT FIELDS
-  // -------------------------------------------------------
-
-  formData.append(
-    "title",
-    blogData.title?.trim() || ""
-  );
-
-  formData.append(
-    "category",
-    blogData.category || ""
-  );
-
-  formData.append(
-    "status",
-    blogData.status || "Draft"
-  );
-
+  formData.append("title", blogData.title || "");
+  formData.append("category", blogData.category || "");
+  formData.append("status", blogData.status || "Draft");
   formData.append(
     "featured",
     String(Boolean(blogData.featured))
   );
-
-  formData.append(
-    "excerpt",
-    blogData.excerpt?.trim() || ""
-  );
-
-  formData.append(
-    "content",
-    blogData.content || ""
-  );
-
-  // -------------------------------------------------------
-  // IMAGE
-  // -------------------------------------------------------
+  formData.append("excerpt", blogData.excerpt || "");
+  formData.append("content", blogData.content || "");
 
   if (blogData.image instanceof File) {
-    formData.append(
-      "image",
-      blogData.image
-    );
+    formData.append("image", blogData.image);
   }
-
-  // -------------------------------------------------------
-  // REQUEST
-  // -------------------------------------------------------
-  //
-  // Do NOT manually set:
-  // Content-Type: multipart/form-data
-  //
-  // The browser automatically adds the required boundary.
-  //
 
   const response = await blogApi.post(
     "/blogs",
@@ -190,63 +110,23 @@ export const createBlogApi = async (blogData = {}) => {
 
 export const updateBlogApi = async (
   id,
-  blogData = {}
+  blogData
 ) => {
-  if (!id) {
-    throw new Error("Blog ID is required");
-  }
-
   const formData = new FormData();
 
-  // -------------------------------------------------------
-  // TEXT FIELDS
-  // -------------------------------------------------------
-
-  formData.append(
-    "title",
-    blogData.title?.trim() || ""
-  );
-
-  formData.append(
-    "category",
-    blogData.category || ""
-  );
-
-  formData.append(
-    "status",
-    blogData.status || "Draft"
-  );
-
+  formData.append("title", blogData.title || "");
+  formData.append("category", blogData.category || "");
+  formData.append("status", blogData.status || "Draft");
   formData.append(
     "featured",
     String(Boolean(blogData.featured))
   );
+  formData.append("excerpt", blogData.excerpt || "");
+  formData.append("content", blogData.content || "");
 
-  formData.append(
-    "excerpt",
-    blogData.excerpt?.trim() || ""
-  );
-
-  formData.append(
-    "content",
-    blogData.content || ""
-  );
-
-  // -------------------------------------------------------
-  // IMAGE
-  // -------------------------------------------------------
-  //
-  // Only send an image when the user selected a NEW image.
-  //
-  // If no image is provided, the backend should keep the
-  // existing image.
-  //
-
+  // Only upload a new image if one was selected.
   if (blogData.image instanceof File) {
-    formData.append(
-      "image",
-      blogData.image
-    );
+    formData.append("image", blogData.image);
   }
 
   const response = await blogApi.put(
@@ -263,10 +143,6 @@ export const updateBlogApi = async (
 // =========================================================
 
 export const deleteBlogApi = async (id) => {
-  if (!id) {
-    throw new Error("Blog ID is required");
-  }
-
   const response = await blogApi.delete(
     `/blogs/${id}`
   );
@@ -276,16 +152,10 @@ export const deleteBlogApi = async (id) => {
 
 
 // =========================================================
-// TOGGLE BLOG PUBLISH STATUS
+// TOGGLE PUBLISH STATUS
 // =========================================================
 
-export const toggleBlogPublishApi = async (
-  id
-) => {
-  if (!id) {
-    throw new Error("Blog ID is required");
-  }
-
+export const toggleBlogPublishApi = async (id) => {
   const response = await blogApi.patch(
     `/blogs/${id}/toggle-publish`
   );
@@ -298,13 +168,7 @@ export const toggleBlogPublishApi = async (
 // INCREMENT BLOG VIEWS
 // =========================================================
 
-export const incrementBlogViewsApi = async (
-  id
-) => {
-  if (!id) {
-    throw new Error("Blog ID is required");
-  }
-
+export const incrementBlogViewsApi = async (id) => {
   const response = await blogApi.patch(
     `/blogs/${id}/views`
   );
@@ -314,20 +178,8 @@ export const incrementBlogViewsApi = async (
 
 
 // =========================================================
-// IMAGE URL HELPER
+// BLOG IMAGE URL
 // =========================================================
-//
-// Database examples:
-//
-// /uploads/blog/example.jpg
-//
-// uploads/blog/example.jpg
-//
-// https://example.com/uploads/blog/example.jpg
-//
-// For relative paths, use the current domain.
-// This makes images work both locally and in production.
-//
 
 export const getBlogImageUrl = (imageUrl) => {
   if (!imageUrl) {
@@ -342,7 +194,7 @@ export const getBlogImageUrl = (imageUrl) => {
     return imageUrl;
   }
 
-  // Make sure the path starts with /
+  // Relative image path
   return imageUrl.startsWith("/")
     ? imageUrl
     : `/${imageUrl}`;
@@ -350,15 +202,8 @@ export const getBlogImageUrl = (imageUrl) => {
 
 
 // =========================================================
-// NORMALIZE BLOG IMAGE
+// BLOG IMAGE NORMALIZER
 // =========================================================
-//
-// Optional helper if backend sometimes returns:
-//
-// image_url
-// imageUrl
-// image
-//
 
 export const getBlogImage = (blog) => {
   if (!blog) {
