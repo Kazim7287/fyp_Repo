@@ -46,15 +46,14 @@ import {
 } from "@ant-design/icons";
 
 import ReactQuill from "react-quill-new";
-
 import "react-quill-new/dist/quill.snow.css";
 
 import { useDispatch, useSelector } from "react-redux";
 
 import {
-  
   createBlog,
   deleteBlog,
+  fetchBlogById,
   fetchBlogStats,
   fetchBlogs,
   selectBlogCreating,
@@ -65,18 +64,18 @@ import {
   selectBlogStats,
   selectBlogToggling,
   selectBlogUpdating,
-  toggleBlogPublish,
   selectBlogs,
+  toggleBlogPublish,
   updateBlog,
-} from "../../../store/slices/blogSlice"
+} from "../../../store/slices/blogSlice";
 
-const { Title, Text, Paragraph } =
-  Typography;
+const { Title, Text, Paragraph } = Typography;
 
-
-// =========================================================
-// CONSTANTS
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Constants
+|--------------------------------------------------------------------------
+*/
 
 const BLOG_CATEGORIES = [
   "Flood Awareness",
@@ -90,10 +89,11 @@ const BLOG_STATUSES = [
   "Draft",
 ];
 
-
-// =========================================================
-// RICH TEXT EDITOR
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| ReactQuill Configuration
+|--------------------------------------------------------------------------
+*/
 
 const quillModules = {
   toolbar: [
@@ -144,7 +144,6 @@ const quillFormats = [
   "underline",
   "strike",
   "list",
-  "bullet",
   "align",
   "blockquote",
   "code-block",
@@ -152,58 +151,165 @@ const quillFormats = [
   "image",
 ];
 
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
 
-// =========================================================
-// IMAGE URL HELPER
-// =========================================================
-
+/**
+ * Convert image URL returned by backend into a browser-safe URL.
+ *
+ * Production architecture:
+ *
+ * Browser
+ *   |
+ *   | http://floodforecast.duckdns.org
+ *   v
+ * Nginx
+ *   |
+ *   +---- /api      -> Node :5000
+ *   |
+ *   +---- /uploads  -> Node :5000
+ *
+ * Therefore relative image paths should remain relative.
+ */
 const getImageUrl = (imageUrl) => {
-
   if (!imageUrl) {
     return null;
   }
 
-  // Already a complete URL
   if (
-    imageUrl.startsWith(
-      "http://"
-    ) ||
-    imageUrl.startsWith(
-      "https://"
-    )
+    typeof imageUrl !== "string"
   ) {
-    return imageUrl;
+    return null;
   }
 
-  const apiUrl =
-    import.meta.env.VITE_API_URL ||
-    "http://localhost:5000/api";
+  const trimmedUrl = imageUrl.trim();
 
-  const backendUrl =
-    apiUrl.replace(
-      /\/api\/?$/,
-      ""
-    );
+  if (!trimmedUrl) {
+    return null;
+  }
 
-  return `${backendUrl}${imageUrl}`;
+  /*
+   * Already an absolute URL.
+   */
+  if (
+    trimmedUrl.startsWith("http://") ||
+    trimmedUrl.startsWith("https://") ||
+    trimmedUrl.startsWith("data:")
+  ) {
+    return trimmedUrl;
+  }
+
+  /*
+   * Backend normally returns something like:
+   *
+   * /uploads/blog/image.jpg
+   *
+   * Keep it relative so Nginx serves it.
+   */
+  return trimmedUrl.startsWith("/")
+    ? trimmedUrl
+    : `/${trimmedUrl}`;
 };
 
+/**
+ * Safely extract an error message.
+ */
+const getErrorMessage = (
+  error,
+  fallback = "Something went wrong."
+) => {
+  if (!error) {
+    return fallback;
+  }
 
-// =========================================================
-// COMPONENT
-// =========================================================
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error?.message) {
+    return error.message;
+  }
+
+  if (error?.error) {
+    return error.error;
+  }
+
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+
+  return fallback;
+};
+
+/**
+ * Detect accidental API/auth error text inside blog content.
+ *
+ * This is defensive protection. The real authentication
+ * initialization problem should still be fixed separately.
+ */
+const isInvalidEditorContent = (content) => {
+  if (!content || typeof content !== "string") {
+    return false;
+  }
+
+  const normalized = content
+    .toLowerCase()
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+
+  const suspiciousPatterns = [
+    "auth initialization failed",
+    "axioserror",
+    "request failed with status code 401",
+    "(unauthorized)",
+    "unauthorized",
+    "failed to load resource",
+    "at index-",
+    "xhr @",
+  ];
+
+  return suspiciousPatterns.some(
+    (pattern) =>
+      normalized.includes(pattern)
+  );
+};
+
+/**
+ * Check whether the editor actually contains useful text.
+ */
+const hasEditorContent = (content) => {
+  if (!content || typeof content !== "string") {
+    return false;
+  }
+
+  const text = content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+
+  return text.length > 0;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Component
+|--------------------------------------------------------------------------
+*/
 
 const Blog = () => {
-
   const dispatch = useDispatch();
 
-  // =======================================================
-  // REDUX
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Redux
+  |--------------------------------------------------------------------------
+  */
 
-  const blogs = useSelector(
-    selectBlogs
-  );
+  const blogs = useSelector(selectBlogs);
 
   const stats = useSelector(
     selectBlogStats
@@ -237,13 +343,13 @@ const Blog = () => {
     selectBlogError
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Local State
+  |--------------------------------------------------------------------------
+  */
 
-  // =======================================================
-  // LOCAL UI STATE
-  // =======================================================
-
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
   const [statusFilter, setStatusFilter] =
     useState("all");
@@ -263,93 +369,98 @@ const Blog = () => {
   const [previewOpen, setPreviewOpen] =
     useState(false);
 
+  const [previewLoading, setPreviewLoading] =
+    useState(false);
+
   const [editingPost, setEditingPost] =
     useState(null);
 
   const [previewPost, setPreviewPost] =
     useState(null);
 
-  const [form] =
-    Form.useForm();
+  const [form] = Form.useForm();
 
+  /*
+  |--------------------------------------------------------------------------
+  | Load Blogs
+  |--------------------------------------------------------------------------
+  */
 
-  // =======================================================
-  // LOAD BLOGS
-  // =======================================================
+  const loadBlogs = useCallback(() => {
+    dispatch(
+      fetchBlogs({
+        search: search.trim(),
+        status: statusFilter,
+        category: categoryFilter,
+        page: currentPage,
+        limit: pageSize,
+      })
+    );
+  }, [
+    dispatch,
+    search,
+    statusFilter,
+    categoryFilter,
+    currentPage,
+    pageSize,
+  ]);
 
-  const loadBlogs =
-    useCallback(() => {
-
-      dispatch(
-        fetchBlogs({
-          search,
-          status: statusFilter,
-          category: categoryFilter,
-          page: currentPage,
-          limit: pageSize,
-        })
-      );
-
-    }, [
-      dispatch,
-      search,
-      statusFilter,
-      categoryFilter,
-      currentPage,
-      pageSize,
-    ]);
-
-
-  // =======================================================
-  // INITIAL LOAD
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Initial Load
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
-
     loadBlogs();
-
   }, [loadBlogs]);
 
-
-  // =======================================================
-  // LOAD STATISTICS
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Load Statistics
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
-
-    dispatch(
-      fetchBlogStats()
-    );
-
+    dispatch(fetchBlogStats());
   }, [dispatch]);
 
-
-  // =======================================================
-  // SHOW API ERROR
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Show API Errors
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
-
-    if (error) {
-      message.error(error);
+    if (!error) {
+      return;
     }
 
+    message.error(
+      getErrorMessage(
+        error,
+        "Failed to load blog data."
+      )
+    );
   }, [error]);
 
-
-  // =======================================================
-  // CREATE
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Create Blog
+  |--------------------------------------------------------------------------
+  */
 
   const handleCreate = () => {
-
     setEditingPost(null);
 
     form.resetFields();
 
     form.setFieldsValue({
+      title: "",
+      category: undefined,
       status: "Draft",
       featured: false,
+      excerpt: "",
       content: "",
       image: [],
     });
@@ -357,47 +468,106 @@ const Blog = () => {
     setModalOpen(true);
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Edit Blog
+  |--------------------------------------------------------------------------
+  */
 
-  // =======================================================
-  // EDIT
-  // =======================================================
+  const handleEdit = async (post) => {
+    try {
+      setEditingPost(post);
 
-  const handleEdit = (post) => {
+      /*
+       * First populate the form immediately.
+       * This makes the UI responsive even if the
+       * single-blog request takes some time.
+       */
+      form.setFieldsValue({
+        title: post.title || "",
+        category: post.category || undefined,
+        status: post.status || "Draft",
+        featured: Boolean(post.featured),
+        excerpt: post.excerpt || "",
+        content: post.content || "",
+        image: [],
+      });
 
-    setEditingPost(post);
+      setModalOpen(true);
 
-    form.setFieldsValue({
-      title:
-        post.title,
+      /*
+       * Try to retrieve the complete blog.
+       *
+       * This is useful if the list API returns a shortened
+       * version of content.
+       */
+      const result = await dispatch(
+        fetchBlogById(post.id)
+      ).unwrap();
 
-      category:
-        post.category,
+      const fullBlog =
+        result?.data ||
+        result?.blog ||
+        result;
 
-      status:
-        post.status,
+      if (!fullBlog) {
+        return;
+      }
 
-      featured:
-        Boolean(post.featured),
+      /*
+       * Ignore obviously corrupted content coming from
+       * the old bad record.
+       */
+      const safeContent =
+        isInvalidEditorContent(
+          fullBlog.content
+        )
+          ? ""
+          : fullBlog.content || "";
 
-      excerpt:
-        post.excerpt,
+      form.setFieldsValue({
+        title: fullBlog.title || "",
+        category:
+          fullBlog.category ||
+          undefined,
+        status:
+          fullBlog.status ||
+          "Draft",
+        featured: Boolean(
+          fullBlog.featured
+        ),
+        excerpt:
+          fullBlog.excerpt || "",
+        content: safeContent,
+        image: [],
+      });
 
-      content:
-        post.content,
+      setEditingPost(fullBlog);
+    } catch (error) {
+      /*
+       * Do not close the editor just because
+       * fetching the full blog failed.
+       *
+       * The already-loaded post can still be edited.
+       */
+      console.error(
+        "Failed to load full blog:",
+        error
+      );
 
-      image: [],
-    });
-
-    setModalOpen(true);
+      message.warning(
+        "Could not load the complete blog content. The available blog data has been loaded."
+      );
+    }
   };
 
-
-  // =======================================================
-  // CLOSE MODAL
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Close Modal
+  |--------------------------------------------------------------------------
+  */
 
   const closeModal = () => {
-
     setModalOpen(false);
 
     form.resetFields();
@@ -405,312 +575,392 @@ const Blog = () => {
     setEditingPost(null);
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Save Blog
+  |--------------------------------------------------------------------------
+  */
 
-  // =======================================================
-  // SAVE BLOG
-  // =======================================================
+  const handleSave = async (
+    forcedStatus = null
+  ) => {
+    try {
+      const values =
+        await form.validateFields();
 
-  const handleSave =
-    async (
-      forcedStatus = null
-    ) => {
+      const finalStatus =
+        forcedStatus ||
+        values.status ||
+        "Draft";
 
-      try {
+      /*
+       * Normalize form values before sending them.
+       */
+      const title =
+        values.title?.trim() || "";
 
-        const values =
-          await form.validateFields();
+      const category =
+        values.category || "";
 
-        const finalStatus =
-          forcedStatus ||
-          values.status ||
-          "Draft";
+      const excerpt =
+        values.excerpt?.trim() || "";
 
-        const imageFile =
-          values.image?.[0]
-            ?.originFileObj ||
-          null;
+      const content =
+        values.content || "";
 
-
-        const blogData = {
-
-          title:
-            values.title,
-
-          category:
-            values.category,
-
-          status:
-            finalStatus,
-
-          featured:
-            Boolean(
-              values.featured
-            ),
-
-          excerpt:
-            values.excerpt,
-
-          content:
-            values.content,
-
-          image:
-            imageFile,
-        };
-
-
-        // =================================================
-        // UPDATE
-        // =================================================
-
-        if (editingPost) {
-
-          const result =
-            await dispatch(
-              updateBlog({
-                id:
-                  editingPost.id,
-
-                data:
-                  blogData,
-              })
-            ).unwrap();
-
-          message.success(
-            finalStatus ===
-              "Published"
-              ? "Blog published successfully."
-              : "Draft saved successfully."
-          );
-
-        }
-
-
-        // =================================================
-        // CREATE
-        // =================================================
-
-        else {
-
-          await dispatch(
-            createBlog(
-              blogData
-            )
-          ).unwrap();
-
-          message.success(
-            finalStatus ===
-              "Published"
-              ? "Blog published successfully."
-              : "Draft saved successfully."
-          );
-        }
-
-
-        closeModal();
-
-        // Refresh table
-        loadBlogs();
-
-        // Refresh statistics
-        dispatch(
-          fetchBlogStats()
-        );
-
-      } catch (error) {
-
-        // Ant Design validation errors
-        // are already displayed automatically.
-
-        if (
-          typeof error ===
-          "string"
-        ) {
-          message.error(error);
-        }
-      }
-    };
-
-
-  // =======================================================
-  // DELETE
-  // =======================================================
-
-  const handleDelete =
-    async (id) => {
-
-      try {
-
-        await dispatch(
-          deleteBlog(id)
-        ).unwrap();
-
-        message.success(
-          "Blog deleted successfully."
-        );
-
-        loadBlogs();
-
-        dispatch(
-          fetchBlogStats()
-        );
-
-      } catch (error) {
-
+      /*
+       * --------------------------------------------------------
+       * IMPORTANT PROTECTION
+       * --------------------------------------------------------
+       *
+       * Your previous database record contained:
+       *
+       * Auth initialization failed:
+       * AxiosError: Request failed with status code 401
+       *
+       * That means the frontend was actually putting the
+       * authentication error text into the ReactQuill value.
+       *
+       * Never allow that text to be saved as blog content.
+       */
+      if (
+        isInvalidEditorContent(content)
+      ) {
         message.error(
-          typeof error ===
-            "string"
-            ? error
-            : "Failed to delete blog."
+          "The blog editor contains an authentication error instead of blog content. Please clear it and enter the article again."
         );
+
+        return;
       }
-    };
 
+      if (!hasEditorContent(content)) {
+        message.error(
+          "Please enter blog content."
+        );
 
-  // =======================================================
-  // TOGGLE PUBLISH
-  // =======================================================
+        return;
+      }
 
-  const handleTogglePublish =
-    async (post) => {
+      /*
+       * Image uploaded through Ant Design Upload.
+       */
+      const imageFile =
+        values.image?.[0]
+          ?.originFileObj || null;
 
-      try {
+      const blogData = {
+        title,
+        category,
+        status: finalStatus,
+        featured: Boolean(
+          values.featured
+        ),
+        excerpt,
+        content,
+        image: imageFile,
+      };
 
+      /*
+       * Temporary debugging.
+       *
+       * Keep this while testing the authentication/content
+       * issue. Remove later if you want.
+       */
+      console.log(
+        "BLOG CONTENT BEFORE SAVE:",
+        blogData.content
+      );
+
+      /*
+       * --------------------------------------------------------
+       * UPDATE
+       * --------------------------------------------------------
+       */
+
+      if (editingPost) {
         await dispatch(
-          toggleBlogPublish(
-            post.id
-          )
+          updateBlog({
+            id: editingPost.id,
+            data: blogData,
+          })
         ).unwrap();
 
-        const newStatus =
-          post.status ===
-          "Published"
-            ? "Draft"
-            : "Published";
-
         message.success(
-          newStatus ===
-            "Published"
+          finalStatus === "Published"
             ? "Blog published successfully."
-            : "Blog moved to draft."
-        );
-
-        loadBlogs();
-
-        dispatch(
-          fetchBlogStats()
-        );
-
-      } catch (error) {
-
-        message.error(
-          typeof error ===
-            "string"
-            ? error
-            : "Failed to update blog status."
+            : "Draft saved successfully."
         );
       }
-    };
 
+      /*
+       * --------------------------------------------------------
+       * CREATE
+       * --------------------------------------------------------
+       */
 
-  // =======================================================
-  // PREVIEW
-  // =======================================================
+      else {
+        await dispatch(
+          createBlog(blogData)
+        ).unwrap();
 
-  const handlePreview =
-    (post) => {
+        message.success(
+          finalStatus === "Published"
+            ? "Blog published successfully."
+            : "Draft saved successfully."
+        );
+      }
 
-      setPreviewPost(post);
+      /*
+       * Close editor.
+       */
+      closeModal();
 
-      setPreviewOpen(true);
-    };
+      /*
+       * Refresh list and statistics.
+       */
+      loadBlogs();
 
+      dispatch(fetchBlogStats());
+    } catch (error) {
+      /*
+       * Ant Design validation errors are automatically
+       * displayed beside their corresponding fields.
+       *
+       * Redux .unwrap() errors are handled here.
+       */
+      if (
+        error?.errorFields
+      ) {
+        return;
+      }
 
-  // =======================================================
-  // SEARCH
-  // =======================================================
-
-  const handleSearch =
-    (event) => {
-
-      setSearch(
-        event.target.value
+      console.error(
+        "Save blog failed:",
+        error
       );
 
-      setCurrentPage(1);
-    };
+      message.error(
+        getErrorMessage(
+          error,
+          "Failed to save blog."
+        )
+      );
+    }
+  };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Delete Blog
+  |--------------------------------------------------------------------------
+  */
 
-  // =======================================================
-  // STATUS FILTER
-  // =======================================================
+  const handleDelete = async (id) => {
+    try {
+      await dispatch(
+        deleteBlog(id)
+      ).unwrap();
 
-  const handleStatusChange =
-    (value) => {
-
-      setStatusFilter(value);
-
-      setCurrentPage(1);
-    };
-
-
-  // =======================================================
-  // CATEGORY FILTER
-  // =======================================================
-
-  const handleCategoryChange =
-    (value) => {
-
-      setCategoryFilter(value);
-
-      setCurrentPage(1);
-    };
-
-
-  // =======================================================
-  // TABLE DATA
-  // =======================================================
-
-  const tableData =
-    useMemo(() => {
-
-      return blogs.map(
-        (post) => ({
-          ...post,
-
-          key:
-            post.id,
-        })
+      message.success(
+        "Blog deleted successfully."
       );
 
-    }, [blogs]);
+      loadBlogs();
 
+      dispatch(fetchBlogStats());
+    } catch (error) {
+      console.error(
+        "Delete blog failed:",
+        error
+      );
 
-  // =======================================================
-  // UPLOAD CONFIGURATION
-  // =======================================================
+      message.error(
+        getErrorMessage(
+          error,
+          "Failed to delete blog."
+        )
+      );
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Toggle Publish
+  |--------------------------------------------------------------------------
+  */
+
+  const handleTogglePublish = async (
+    post
+  ) => {
+    try {
+      await dispatch(
+        toggleBlogPublish(post.id)
+      ).unwrap();
+
+      const newStatus =
+        post.status === "Published"
+          ? "Draft"
+          : "Published";
+
+      message.success(
+        newStatus === "Published"
+          ? "Blog published successfully."
+          : "Blog moved to draft."
+      );
+
+      loadBlogs();
+
+      dispatch(fetchBlogStats());
+    } catch (error) {
+      console.error(
+        "Toggle blog status failed:",
+        error
+      );
+
+      message.error(
+        getErrorMessage(
+          error,
+          "Failed to update blog status."
+        )
+      );
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Preview
+  |--------------------------------------------------------------------------
+  */
+
+  const handlePreview = async (post) => {
+    /*
+     * Show current list data immediately.
+     */
+    setPreviewPost(post);
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+
+    try {
+      /*
+       * Fetch the complete blog.
+       */
+      const result = await dispatch(
+        fetchBlogById(post.id)
+      ).unwrap();
+
+      const fullBlog =
+        result?.data ||
+        result?.blog ||
+        result;
+
+      if (fullBlog) {
+        setPreviewPost(fullBlog);
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load blog preview:",
+        error
+      );
+
+      /*
+       * Do not close the preview.
+       * The list version is still usable.
+       */
+      message.warning(
+        "Could not load the latest blog content."
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Search
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSearch = (event) => {
+    setSearch(
+      event.target.value
+    );
+
+    setCurrentPage(1);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Status Filter
+  |--------------------------------------------------------------------------
+  */
+
+  const handleStatusChange = (
+    value
+  ) => {
+    setStatusFilter(value);
+
+    setCurrentPage(1);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Category Filter
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCategoryChange = (
+    value
+  ) => {
+    setCategoryFilter(value);
+
+    setCurrentPage(1);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Table Data
+  |--------------------------------------------------------------------------
+  */
+
+  const tableData = useMemo(() => {
+    if (!Array.isArray(blogs)) {
+      return [];
+    }
+
+    return blogs.map((post) => ({
+      ...post,
+      key: post.id,
+    }));
+  }, [blogs]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Upload Configuration
+  |--------------------------------------------------------------------------
+  */
 
   const uploadProps = {
-
     beforeUpload: () => false,
 
     maxCount: 1,
 
-    accept: "image/jpeg,image/png,image/webp,image/gif",
+    accept:
+      "image/jpeg,image/png,image/webp,image/gif",
 
     listType: "picture-card",
-
   };
 
-
-  // =======================================================
-  // TABLE COLUMNS
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Table Columns
+  |--------------------------------------------------------------------------
+  */
 
   const columns = [
-
-    // -----------------------------------------------------
-    // TITLE
-    // -----------------------------------------------------
+    /*
+     * ----------------------------------------------------------
+     * TITLE
+     * ----------------------------------------------------------
+     */
 
     {
       title: "Title",
@@ -723,29 +973,25 @@ const Blog = () => {
         title,
         record
       ) => (
-
         <Space>
-
           {record.featured && (
             <Tooltip title="Featured Blog">
-
               <StarOutlined />
-
             </Tooltip>
           )}
 
           <Text strong>
-            {title}
+            {title || "-"}
           </Text>
-
         </Space>
       ),
     },
 
-
-    // -----------------------------------------------------
-    // CATEGORY
-    // -----------------------------------------------------
+    /*
+     * ----------------------------------------------------------
+     * CATEGORY
+     * ----------------------------------------------------------
+     */
 
     {
       title: "Category",
@@ -755,17 +1001,17 @@ const Blog = () => {
       key: "category",
 
       render: (category) => (
-
         <Tag color="blue">
-          {category}
+          {category || "-"}
         </Tag>
       ),
     },
 
-
-    // -----------------------------------------------------
-    // STATUS
-    // -----------------------------------------------------
+    /*
+     * ----------------------------------------------------------
+     * STATUS
+     * ----------------------------------------------------------
+     */
 
     {
       title: "Status",
@@ -775,7 +1021,6 @@ const Blog = () => {
       key: "status",
 
       render: (status) => (
-
         <Tag
           icon={
             status ===
@@ -785,7 +1030,6 @@ const Blog = () => {
               <ClockCircleOutlined />
             )
           }
-
           color={
             status ===
             "Published"
@@ -793,15 +1037,16 @@ const Blog = () => {
               : "default"
           }
         >
-          {status}
+          {status || "Draft"}
         </Tag>
       ),
     },
 
-
-    // -----------------------------------------------------
-    // VIEWS
-    // -----------------------------------------------------
+    /*
+     * ----------------------------------------------------------
+     * VIEWS
+     * ----------------------------------------------------------
+     */
 
     {
       title: "Views",
@@ -811,13 +1056,16 @@ const Blog = () => {
       key: "views",
 
       render: (views) =>
-        Number(views || 0).toLocaleString(),
+        Number(
+          views || 0
+        ).toLocaleString(),
     },
 
-
-    // -----------------------------------------------------
-    // DATE
-    // -----------------------------------------------------
+    /*
+     * ----------------------------------------------------------
+     * DATE
+     * ----------------------------------------------------------
+     */
 
     {
       title: "Date",
@@ -830,7 +1078,6 @@ const Blog = () => {
         date,
         record
       ) => {
-
         const blogDate =
           date ||
           record.date;
@@ -839,16 +1086,26 @@ const Blog = () => {
           return "-";
         }
 
-        return new Date(
-          blogDate
-        ).toLocaleDateString();
+        const parsedDate =
+          new Date(blogDate);
+
+        if (
+          Number.isNaN(
+            parsedDate.getTime()
+          )
+        ) {
+          return "-";
+        }
+
+        return parsedDate.toLocaleDateString();
       },
     },
 
-
-    // -----------------------------------------------------
-    // ACTIONS
-    // -----------------------------------------------------
+    /*
+     * ----------------------------------------------------------
+     * ACTIONS
+     * ----------------------------------------------------------
+     */
 
     {
       title: "Action",
@@ -861,46 +1118,34 @@ const Blog = () => {
         _,
         record
       ) => (
-
         <Space>
-
           {/* VIEW */}
 
           <Tooltip title="View">
-
             <Button
               type="text"
               icon={
                 <EyeOutlined />
               }
               onClick={() =>
-                handlePreview(
-                  record
-                )
+                handlePreview(record)
               }
             />
-
           </Tooltip>
-
 
           {/* EDIT */}
 
           <Tooltip title="Edit">
-
             <Button
               type="text"
               icon={
                 <EditOutlined />
               }
               onClick={() =>
-                handleEdit(
-                  record
-                )
+                handleEdit(record)
               }
             />
-
           </Tooltip>
-
 
           {/* PUBLISH / DRAFT */}
 
@@ -912,14 +1157,9 @@ const Blog = () => {
                 : "Publish"
             }
           >
-
             <Button
               type="text"
-
-              loading={
-                toggling
-              }
-
+              loading={toggling}
               icon={
                 record.status ===
                 "Published" ? (
@@ -928,41 +1168,31 @@ const Blog = () => {
                   <SendOutlined />
                 )
               }
-
               onClick={() =>
                 handleTogglePublish(
                   record
                 )
               }
             />
-
           </Tooltip>
-
 
           {/* DELETE */}
 
           <Popconfirm
             title="Delete this blog?"
-
             description="This action cannot be undone."
-
             okText="Delete"
-
             cancelText="Cancel"
-
             okButtonProps={{
               danger: true,
             }}
-
             onConfirm={() =>
               handleDelete(
                 record.id
               )
             }
           >
-
             <Tooltip title="Delete">
-
               <Button
                 type="text"
                 danger
@@ -970,45 +1200,36 @@ const Blog = () => {
                   <DeleteOutlined />
                 }
               />
-
             </Tooltip>
-
           </Popconfirm>
-
         </Space>
       ),
     },
   ];
 
-
-  // =======================================================
-  // RENDER
-  // =======================================================
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
 
   return (
-
     <div>
-
-      {/* ===================================================
+      {/* ======================================================
           HEADER
-      =================================================== */}
+      ====================================================== */}
 
       <div
         style={{
           display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems:
-            "center",
+          justifyContent: "space-between",
+          alignItems: "center",
           gap: 16,
-          flexWrap:
-            "wrap",
+          flexWrap: "wrap",
           marginBottom: 24,
         }}
       >
-
         <div>
-
           <Title
             level={3}
             style={{
@@ -1022,9 +1243,7 @@ const Blog = () => {
             Create, edit, publish, and manage
             public FloodGuard blog articles.
           </Text>
-
         </div>
-
 
         <Button
           type="primary"
@@ -1038,146 +1257,112 @@ const Blog = () => {
         >
           Create New Blog
         </Button>
-
       </div>
 
-
-      {/* ===================================================
+      {/* ======================================================
           STATISTICS
-      =================================================== */}
+      ====================================================== */}
 
       <Row
-        gutter={[
-          16,
-          16,
-        ]}
+        gutter={[16, 16]}
         style={{
           marginBottom: 24,
         }}
       >
-
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Total Blogs"
               value={
-                stats.total
+                stats?.total || 0
               }
               prefix={
                 <FileTextOutlined />
               }
             />
-
           </Card>
-
         </Col>
-
 
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Published"
               value={
-                stats.published
+                stats?.published || 0
               }
               prefix={
                 <CheckCircleOutlined />
               }
             />
-
           </Card>
-
         </Col>
-
 
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Drafts"
               value={
-                stats.drafts
+                stats?.drafts || 0
               }
               prefix={
                 <ClockCircleOutlined />
               }
             />
-
           </Card>
-
         </Col>
-
 
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Featured"
               value={
-                stats.featured
+                stats?.featured || 0
               }
               prefix={
                 <StarOutlined />
               }
             />
-
           </Card>
-
         </Col>
-
       </Row>
 
-
-      {/* ===================================================
+      {/* ======================================================
           BLOG LIST
-      =================================================== */}
+      ====================================================== */}
 
       <Card
         title={
           <Space>
-
-            <Badge
-              status="processing"
-            />
+            <Badge status="processing" />
 
             <span>
               Blog Articles
             </span>
-
           </Space>
         }
-
         extra={
-
           <Button
             icon={
               <ReloadOutlined />
             }
             onClick={() => {
               loadBlogs();
-
               dispatch(
                 fetchBlogStats()
               );
@@ -1187,159 +1372,108 @@ const Blog = () => {
           </Button>
         }
       >
-
-        {/* =================================================
+        {/* ====================================================
             FILTERS
-        ================================================= */}
+        ==================================================== */}
 
         <Row
-          gutter={[
-            12,
-            12,
-          ]}
+          gutter={[12, 12]}
           style={{
             marginBottom: 20,
           }}
         >
-
           <Col
             xs={24}
             md={12}
           >
-
             <Input
               size="large"
               allowClear
-
               prefix={
                 <SearchOutlined />
               }
-
               placeholder="Search blogs..."
-
-              value={
-                search
-              }
-
+              value={search}
               onChange={
                 handleSearch
               }
             />
-
           </Col>
-
 
           <Col
             xs={24}
             sm={12}
             md={6}
           >
-
             <Select
               size="large"
-
               style={{
                 width: "100%",
               }}
-
-              value={
-                statusFilter
-              }
-
+              value={statusFilter}
               onChange={
                 handleStatusChange
               }
-
               options={[
                 {
-                  value:
-                    "all",
-
+                  value: "all",
                   label:
                     "All Statuses",
                 },
 
                 ...BLOG_STATUSES.map(
                   (status) => ({
-                    value:
-                      status,
-
-                    label:
-                      status,
+                    value: status,
+                    label: status,
                   })
                 ),
               ]}
             />
-
           </Col>
-
 
           <Col
             xs={24}
             sm={12}
             md={6}
           >
-
             <Select
               size="large"
-
               style={{
                 width: "100%",
               }}
-
               value={
                 categoryFilter
               }
-
               onChange={
                 handleCategoryChange
               }
-
               options={[
                 {
-                  value:
-                    "all",
-
+                  value: "all",
                   label:
                     "All Categories",
                 },
 
                 ...BLOG_CATEGORIES.map(
                   (category) => ({
-                    value:
-                      category,
-
-                    label:
-                      category,
+                    value: category,
+                    label: category,
                   })
                 ),
               ]}
             />
-
           </Col>
-
         </Row>
 
-
-        {/* =================================================
+        {/* ====================================================
             TABLE
-        ================================================= */}
+        ==================================================== */}
 
         <Table
           rowKey="id"
-
-          columns={
-            columns
-          }
-
-          dataSource={
-            tableData
-          }
-
-          loading={
-            loading
-          }
-
+          columns={columns}
+          dataSource={tableData}
+          loading={loading}
           locale={{
             emptyText: (
               <Empty
@@ -1347,22 +1481,20 @@ const Blog = () => {
               />
             ),
           }}
-
           pagination={{
             current:
-              pagination.page ||
+              pagination?.page ||
               currentPage,
 
             pageSize:
-              pagination.limit ||
+              pagination?.limit ||
               pageSize,
 
             total:
-              pagination.total ||
+              pagination?.total ||
               0,
 
-            showSizeChanger:
-              true,
+            showSizeChanger: true,
 
             pageSizeOptions: [
               8,
@@ -1371,24 +1503,22 @@ const Blog = () => {
               50,
             ],
 
-            showTotal:
-              (total) =>
-                `Total ${total} blogs`,
+            showTotal: (
+              total
+            ) =>
+              `Total ${total} blogs`,
 
             onChange: (
               page,
               size
             ) => {
-
               setCurrentPage(
                 page
               );
 
               if (
-                size !==
-                pageSize
+                size !== pageSize
               ) {
-
                 setPageSize(
                   size
                 );
@@ -1399,148 +1529,109 @@ const Blog = () => {
               }
             },
           }}
-
           scroll={{
             x: 1000,
           }}
         />
-
       </Card>
 
-
-      {/* ===================================================
+      {/* ======================================================
           CREATE / EDIT MODAL
-      =================================================== */}
+      ====================================================== */}
 
       <Modal
-
         title={
           editingPost
             ? "Edit Blog"
             : "Create New Blog"
         }
-
-        open={
-          modalOpen
-        }
-
+        open={modalOpen}
         onCancel={
           closeModal
         }
-
         footer={null}
-
         width={850}
-
         destroyOnHidden
       >
-
         <Form
           form={form}
           layout="vertical"
         >
-
-          {/* =================================================
+          {/* ==================================================
               TITLE
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Title"
             name="title"
-
             rules={[
               {
-                required:
-                  true,
-
+                required: true,
+                whitespace: true,
                 message:
                   "Please enter the blog title.",
               },
 
               {
-                max:
-                  255,
-
+                max: 255,
                 message:
                   "Title cannot exceed 255 characters.",
               },
             ]}
           >
-
             <Input
               size="large"
               placeholder="Enter blog title"
               showCount
               maxLength={255}
             />
-
           </Form.Item>
 
-
-          {/* =================================================
+          {/* ==================================================
               CATEGORY
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Category"
             name="category"
-
             rules={[
               {
-                required:
-                  true,
-
+                required: true,
                 message:
                   "Please select a category.",
               },
             ]}
           >
-
             <Select
               size="large"
               placeholder="Select category"
-
-              options={
-                BLOG_CATEGORIES.map(
-                  (category) => ({
-                    value:
-                      category,
-
-                    label:
-                      category,
-                  })
-                )
-              }
+              options={BLOG_CATEGORIES.map(
+                (category) => ({
+                  value: category,
+                  label: category,
+                })
+              )}
             />
-
           </Form.Item>
 
-
-          {/* =================================================
+          {/* ==================================================
               IMAGE
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Featured Image"
-
             name="image"
-
             valuePropName="fileList"
-
             getValueFromEvent={(
               event
             ) =>
-              event?.fileList ||
-              []
+              event?.fileList || []
             }
           >
-
             <Upload
               {...uploadProps}
             >
-
               <div>
-
                 <PictureOutlined
                   style={{
                     fontSize: 25,
@@ -1554,159 +1645,151 @@ const Blog = () => {
                 >
                   Upload Image
                 </div>
-
               </div>
-
             </Upload>
-
           </Form.Item>
 
-
-          {/* =================================================
+          {/* ==================================================
               EXCERPT
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Short Description"
             name="excerpt"
-
             rules={[
               {
-                required:
-                  true,
-
+                required: true,
+                whitespace: true,
                 message:
                   "Please enter a short description.",
               },
+
+              {
+                max: 300,
+                message:
+                  "Short description cannot exceed 300 characters.",
+              },
             ]}
           >
-
             <Input.TextArea
               rows={4}
               showCount
               maxLength={300}
               placeholder="Enter a short description..."
             />
-
           </Form.Item>
 
-
-          {/* =================================================
+          {/* ==================================================
               CONTENT
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Content"
             name="content"
-
             rules={[
               {
-                required:
-                  true,
+                validator: async (
+                  _,
+                  value
+                ) => {
+                  /*
+                   * Prevent the exact authentication
+                   * error from being considered valid
+                   * editor content.
+                   */
+                  if (
+                    isInvalidEditorContent(
+                      value
+                    )
+                  ) {
+                    throw new Error(
+                      "The editor contains an authentication error. Please clear it and enter your blog content."
+                    );
+                  }
 
-                message:
-                  "Please enter blog content.",
+                  if (
+                    !hasEditorContent(
+                      value
+                    )
+                  ) {
+                    throw new Error(
+                      "Please enter blog content."
+                    );
+                  }
+                },
               },
             ]}
           >
-
             <ReactQuill
               theme="snow"
-
               modules={
                 quillModules
               }
-
               formats={
                 quillFormats
               }
-
               placeholder="Write your blog article here..."
-
               style={{
                 minHeight: 280,
                 marginBottom: 45,
               }}
             />
-
           </Form.Item>
 
-
-          {/* =================================================
+          {/* ==================================================
               STATUS
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Publication Status"
             name="status"
           >
-
             <Select
               size="large"
-
               options={[
                 {
-                  value:
-                    "Draft",
-
-                  label:
-                    "Draft",
+                  value: "Draft",
+                  label: "Draft",
                 },
 
                 {
-                  value:
-                    "Published",
-
-                  label:
-                    "Published",
+                  value: "Published",
+                  label: "Published",
                 },
               ]}
             />
-
           </Form.Item>
 
-
-          {/* =================================================
+          {/* ==================================================
               FEATURED
-          ================================================= */}
+          ================================================== */}
 
           <Form.Item
             label="Featured Blog"
             name="featured"
-
             valuePropName="checked"
           >
-
             <Switch
               checkedChildren="Yes"
               unCheckedChildren="No"
             />
-
           </Form.Item>
-
 
           <Divider />
 
-
-          {/* =================================================
+          {/* ==================================================
               ACTIONS
-          ================================================= */}
+          ================================================== */}
 
           <div
             style={{
-              display:
-                "flex",
-
+              display: "flex",
               justifyContent:
                 "flex-end",
-
               gap: 12,
-
-              flexWrap:
-                "wrap",
+              flexWrap: "wrap",
             }}
           >
-
             <Button
               onClick={
                 closeModal
@@ -1715,17 +1798,14 @@ const Blog = () => {
               Cancel
             </Button>
 
-
             <Button
               icon={
                 <ClockCircleOutlined />
               }
-
               loading={
                 creating ||
                 updating
               }
-
               onClick={() =>
                 handleSave(
                   "Draft"
@@ -1735,19 +1815,15 @@ const Blog = () => {
               Save Draft
             </Button>
 
-
             <Button
               type="primary"
-
               icon={
                 <SendOutlined />
               }
-
               loading={
                 creating ||
                 updating
               }
-
               onClick={() =>
                 handleSave(
                   "Published"
@@ -1756,91 +1832,77 @@ const Blog = () => {
             >
               Publish
             </Button>
-
           </div>
-
         </Form>
-
       </Modal>
 
-
-      {/* ===================================================
+      {/* ======================================================
           PREVIEW MODAL
-      =================================================== */}
+      ====================================================== */}
 
       <Modal
-
         title="Blog Preview"
-
-        open={
-          previewOpen
-        }
-
-        onCancel={() =>
-          setPreviewOpen(
-            false
-          )
-        }
-
+        open={previewOpen}
+        onCancel={() => {
+          setPreviewOpen(false);
+          setPreviewPost(null);
+        }}
         footer={null}
-
         width={850}
       >
-
-        {previewPost ? (
-
+        {previewLoading ? (
+          <div
+            style={{
+              minHeight: 300,
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                "center",
+            }}
+          >
+            <Spin size="large" />
+          </div>
+        ) : previewPost ? (
           <div>
-
             {/* IMAGE */}
 
             {previewPost.image_url && (
-
               <img
-                src={
-                  getImageUrl(
-                    previewPost.image_url
-                  )
-                }
-
+                src={getImageUrl(
+                  previewPost.image_url
+                )}
                 alt={
-                  previewPost.title
+                  previewPost.title ||
+                  "Blog image"
                 }
-
+                onError={(event) => {
+                  event.currentTarget.style.display =
+                    "none";
+                }}
                 style={{
-                  width:
-                    "100%",
-
-                  maxHeight:
-                    400,
-
-                  objectFit:
-                    "cover",
-
-                  borderRadius:
-                    8,
-
-                  marginBottom:
-                    20,
+                  width: "100%",
+                  maxHeight: 400,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  marginBottom: 20,
                 }}
               />
-
             )}
 
-
-            {/* CATEGORY */}
+            {/* CATEGORY / STATUS */}
 
             <Space
               style={{
-                marginBottom:
-                  12,
+                marginBottom: 12,
               }}
             >
-
-              <Tag color="blue">
-                {
-                  previewPost.category
-                }
-              </Tag>
+              {previewPost.category && (
+                <Tag color="blue">
+                  {
+                    previewPost.category
+                  }
+                </Tag>
+              )}
 
               <Tag
                 color={
@@ -1851,12 +1913,22 @@ const Blog = () => {
                 }
               >
                 {
-                  previewPost.status
+                  previewPost.status ||
+                  "Draft"
                 }
               </Tag>
 
+              {previewPost.featured && (
+                <Tag
+                  icon={
+                    <StarOutlined />
+                  }
+                  color="gold"
+                >
+                  Featured
+                </Tag>
+              )}
             </Space>
-
 
             {/* TITLE */}
 
@@ -1866,11 +1938,9 @@ const Blog = () => {
               }
             </Title>
 
-
             {/* DATE / VIEWS */}
 
             <Space>
-
               <Text type="secondary">
                 {previewPost.created_at
                   ? new Date(
@@ -1886,49 +1956,65 @@ const Blog = () => {
               <Text type="secondary">
                 {Number(
                   previewPost.views ||
-                  0
+                    0
                 ).toLocaleString()}{" "}
                 views
               </Text>
-
             </Space>
 
-
             <Divider />
-
 
             {/* EXCERPT */}
 
-            <Paragraph strong>
-              {
-                previewPost.excerpt
-              }
-            </Paragraph>
+            {previewPost.excerpt && (
+              <>
+                <Paragraph strong>
+                  {
+                    previewPost.excerpt
+                  }
+                </Paragraph>
 
-
-            <Divider />
-
+                <Divider />
+              </>
+            )}
 
             {/* CONTENT */}
 
-            <div
-              dangerouslySetInnerHTML={{
-                __html:
-                  previewPost.content ||
-                  "",
-              }}
-            />
-
+            {isInvalidEditorContent(
+              previewPost.content
+            ) ? (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 8,
+                  background:
+                    "#fff2f0",
+                  border:
+                    "1px solid #ffccc7",
+                }}
+              >
+                <Text type="danger">
+                  This blog contains
+                  invalid authentication
+                  error text instead of
+                  article content.
+                </Text>
+              </div>
+            ) : (
+              <div
+                className="blog-preview-content"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    previewPost.content ||
+                    "",
+                }}
+              />
+            )}
           </div>
-
         ) : (
-
-          <Spin />
-
+          <Empty description="No blog selected." />
         )}
-
       </Modal>
-
     </div>
   );
 };
