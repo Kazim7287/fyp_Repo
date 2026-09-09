@@ -11,6 +11,8 @@ const {
   getBlogStats,
 } = require("../controllers/blog.controller");
 
+const upload = require("../middleware/blogUpload");
+
 const router = express.Router();
 
 // =========================================================
@@ -27,10 +29,20 @@ router.get("/stats", getBlogStats);
 router.get("/:id", getBlog);
 
 // POST /api/blogs
-router.post("/", createBlog);
+// Supports multipart/form-data + optional image
+router.post(
+  "/",
+  upload.single("image"),
+  createBlog
+);
 
 // PUT /api/blogs/:id
-router.put("/:id", updateBlog);
+// Supports multipart/form-data + optional image
+router.put(
+  "/:id",
+  upload.single("image"),
+  updateBlog
+);
 
 // DELETE /api/blogs/:id
 router.delete("/:id", deleteBlog);
