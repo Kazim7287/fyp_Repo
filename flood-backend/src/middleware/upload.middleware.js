@@ -10,6 +10,7 @@ const fs = require("fs");
 const uploadDirectory = path.join(
   __dirname,
   "..",
+  "..",
   "uploads",
   "blogs"
 );
