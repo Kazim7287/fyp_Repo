@@ -131,7 +131,9 @@ const quillModules = {
       "image",
     ],
 
-    ["clean"],
+    [
+      "clean",
+    ],
   ],
 };
 
@@ -155,6 +157,23 @@ const quillFormats = [
 |--------------------------------------------------------------------------
 */
 
+/**
+ * Convert image URL returned by backend into a browser-safe URL.
+ *
+ * Production architecture:
+ *
+ * Browser
+ *   |
+ *   | http://floodforecast.duckdns.org
+ *   v
+ * Nginx
+ *   |
+ *   +---- /api      -> Node :5000
+ *   |
+ *   +---- /uploads  -> Node :5000
+ *
+ * Therefore relative image paths should remain relative.
+ */
 const getImageUrl = (imageUrl) => {
   if (!imageUrl) {
     return null;
@@ -166,13 +185,15 @@ const getImageUrl = (imageUrl) => {
     return null;
   }
 
-  const trimmedUrl =
-    imageUrl.trim();
+  const trimmedUrl = imageUrl.trim();
 
   if (!trimmedUrl) {
     return null;
   }
 
+  /*
+   * Already an absolute URL.
+   */
   if (
     trimmedUrl.startsWith("http://") ||
     trimmedUrl.startsWith("https://") ||
@@ -181,11 +202,21 @@ const getImageUrl = (imageUrl) => {
     return trimmedUrl;
   }
 
+  /*
+   * Backend normally returns something like:
+   *
+   * /uploads/blog/image.jpg
+   *
+   * Keep it relative so Nginx serves it.
+   */
   return trimmedUrl.startsWith("/")
     ? trimmedUrl
     : `/${trimmedUrl}`;
 };
 
+/**
+ * Safely extract an error message.
+ */
 const getErrorMessage = (
   error,
   fallback = "Something went wrong."
@@ -198,31 +229,37 @@ const getErrorMessage = (
     return error;
   }
 
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.error ||
-    error?.message ||
-    error?.error ||
-    fallback
-  );
+  if (error?.message) {
+    return error.message;
+  }
+
+  if (error?.error) {
+    return error.error;
+  }
+
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+
+  return fallback;
 };
 
-const isInvalidEditorContent = (
-  content
-) => {
-  if (
-    !content ||
-    typeof content !== "string"
-  ) {
+/**
+ * Detect accidental API/auth error text inside blog content.
+ *
+ * This is defensive protection. The real authentication
+ * initialization problem should still be fixed separately.
+ */
+const isInvalidEditorContent = (content) => {
+  if (!content || typeof content !== "string") {
     return false;
   }
 
-  const normalized =
-    content
-      .toLowerCase()
-      .replace(/<[^>]*>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .trim();
+  const normalized = content
+    .toLowerCase()
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .trim();
 
   const suspiciousPatterns = [
     "auth initialization failed",
@@ -241,21 +278,18 @@ const isInvalidEditorContent = (
   );
 };
 
-const hasEditorContent = (
-  content
-) => {
-  if (
-    !content ||
-    typeof content !== "string"
-  ) {
+/**
+ * Check whether the editor actually contains useful text.
+ */
+const hasEditorContent = (content) => {
+  if (!content || typeof content !== "string") {
     return false;
   }
 
-  const text =
-    content
-      .replace(/<[^>]*>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .trim();
+  const text = content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .trim();
 
   return text.length > 0;
 };
@@ -275,46 +309,39 @@ const Blog = () => {
   |--------------------------------------------------------------------------
   */
 
-  const blogs =
-    useSelector(selectBlogs);
+  const blogs = useSelector(selectBlogs);
 
-  const stats =
-    useSelector(selectBlogStats);
+  const stats = useSelector(
+    selectBlogStats
+  );
 
-  const pagination =
-    useSelector(
-      selectBlogPagination
-    );
+  const pagination = useSelector(
+    selectBlogPagination
+  );
 
-  const loading =
-    useSelector(
-      selectBlogLoading
-    );
+  const loading = useSelector(
+    selectBlogLoading
+  );
 
-  const creating =
-    useSelector(
-      selectBlogCreating
-    );
+  const creating = useSelector(
+    selectBlogCreating
+  );
 
-  const updating =
-    useSelector(
-      selectBlogUpdating
-    );
+  const updating = useSelector(
+    selectBlogUpdating
+  );
 
-  const deleting =
-    useSelector(
-      selectBlogDeleting
-    );
+  const deleting = useSelector(
+    selectBlogDeleting
+  );
 
-  const toggling =
-    useSelector(
-      selectBlogToggling
-    );
+  const toggling = useSelector(
+    selectBlogToggling
+  );
 
-  const error =
-    useSelector(
-      selectBlogError
-    );
+  const error = useSelector(
+    selectBlogError
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -322,56 +349,36 @@ const Blog = () => {
   |--------------------------------------------------------------------------
   */
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
-  const [
-    statusFilter,
-    setStatusFilter,
-  ] = useState("all");
+  const [statusFilter, setStatusFilter] =
+    useState("all");
 
-  const [
-    categoryFilter,
-    setCategoryFilter,
-  ] = useState("all");
+  const [categoryFilter, setCategoryFilter] =
+    useState("all");
 
-  const [
-    currentPage,
-    setCurrentPage,
-  ] = useState(1);
+  const [currentPage, setCurrentPage] =
+    useState(1);
 
-  const [
-    pageSize,
-    setPageSize,
-  ] = useState(8);
+  const [pageSize, setPageSize] =
+    useState(8);
 
-  const [
-    modalOpen,
-    setModalOpen,
-  ] = useState(false);
+  const [modalOpen, setModalOpen] =
+    useState(false);
 
-  const [
-    previewOpen,
-    setPreviewOpen,
-  ] = useState(false);
+  const [previewOpen, setPreviewOpen] =
+    useState(false);
 
-  const [
-    previewLoading,
-    setPreviewLoading,
-  ] = useState(false);
+  const [previewLoading, setPreviewLoading] =
+    useState(false);
 
-  const [
-    editingPost,
-    setEditingPost,
-  ] = useState(null);
+  const [editingPost, setEditingPost] =
+    useState(null);
 
-  const [
-    previewPost,
-    setPreviewPost,
-  ] = useState(null);
+  const [previewPost, setPreviewPost] =
+    useState(null);
 
-  const [form] =
-    Form.useForm();
+  const [form] = Form.useForm();
 
   /*
   |--------------------------------------------------------------------------
@@ -379,30 +386,28 @@ const Blog = () => {
   |--------------------------------------------------------------------------
   */
 
-  const loadBlogs =
-    useCallback(() => {
-      dispatch(
-        fetchBlogs({
-          search: search.trim(),
-          status: statusFilter,
-          category:
-            categoryFilter,
-          page: currentPage,
-          limit: pageSize,
-        })
-      );
-    }, [
-      dispatch,
-      search,
-      statusFilter,
-      categoryFilter,
-      currentPage,
-      pageSize,
-    ]);
+  const loadBlogs = useCallback(() => {
+    dispatch(
+      fetchBlogs({
+        search: search.trim(),
+        status: statusFilter,
+        category: categoryFilter,
+        page: currentPage,
+        limit: pageSize,
+      })
+    );
+  }, [
+    dispatch,
+    search,
+    statusFilter,
+    categoryFilter,
+    currentPage,
+    pageSize,
+  ]);
 
   /*
   |--------------------------------------------------------------------------
-  | Initial / Filter Load
+  | Initial Load
   |--------------------------------------------------------------------------
   */
 
@@ -412,19 +417,17 @@ const Blog = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Statistics
+  | Load Statistics
   |--------------------------------------------------------------------------
   */
 
   useEffect(() => {
-    dispatch(
-      fetchBlogStats()
-    );
+    dispatch(fetchBlogStats());
   }, [dispatch]);
 
   /*
   |--------------------------------------------------------------------------
-  | API Errors
+  | Show API Errors
   |--------------------------------------------------------------------------
   */
 
@@ -443,7 +446,7 @@ const Blog = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Create
+  | Create Blog
   |--------------------------------------------------------------------------
   */
 
@@ -467,48 +470,40 @@ const Blog = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Edit
+  | Edit Blog
   |--------------------------------------------------------------------------
   */
 
-  const handleEdit = async (
-    post
-  ) => {
+  const handleEdit = async (post) => {
     try {
       setEditingPost(post);
 
+      /*
+       * First populate the form immediately.
+       * This makes the UI responsive even if the
+       * single-blog request takes some time.
+       */
       form.setFieldsValue({
-        title:
-          post.title || "",
-        category:
-          post.category ||
-          undefined,
-        status:
-          post.status ||
-          "Draft",
-        featured:
-          Boolean(
-            post.featured
-          ),
-        excerpt:
-          post.excerpt || "",
-        content:
-          isInvalidEditorContent(
-            post.content
-          )
-            ? ""
-            : post.content || "",
+        title: post.title || "",
+        category: post.category || undefined,
+        status: post.status || "Draft",
+        featured: Boolean(post.featured),
+        excerpt: post.excerpt || "",
+        content: post.content || "",
         image: [],
       });
 
       setModalOpen(true);
 
-      const result =
-        await dispatch(
-          fetchBlogById(
-            post.id
-          )
-        ).unwrap();
+      /*
+       * Try to retrieve the complete blog.
+       *
+       * This is useful if the list API returns a shortened
+       * version of content.
+       */
+      const result = await dispatch(
+        fetchBlogById(post.id)
+      ).unwrap();
 
       const fullBlog =
         result?.data ||
@@ -519,51 +514,49 @@ const Blog = () => {
         return;
       }
 
+      /*
+       * Ignore obviously corrupted content coming from
+       * the old bad record.
+       */
       const safeContent =
         isInvalidEditorContent(
           fullBlog.content
         )
           ? ""
-          : fullBlog.content ||
-            "";
+          : fullBlog.content || "";
 
       form.setFieldsValue({
-        title:
-          fullBlog.title || "",
+        title: fullBlog.title || "",
         category:
           fullBlog.category ||
           undefined,
         status:
           fullBlog.status ||
           "Draft",
-        featured:
-          Boolean(
-            fullBlog.featured
-          ),
+        featured: Boolean(
+          fullBlog.featured
+        ),
         excerpt:
-          fullBlog.excerpt ||
-          "",
-        content:
-          safeContent,
+          fullBlog.excerpt || "",
+        content: safeContent,
         image: [],
       });
 
-      setEditingPost(
-        fullBlog
-      );
+      setEditingPost(fullBlog);
     } catch (error) {
+      /*
+       * Do not close the editor just because
+       * fetching the full blog failed.
+       *
+       * The already-loaded post can still be edited.
+       */
       console.error(
         "Failed to load full blog:",
         error
       );
 
-      /*
-       * Do not prevent editing if the
-       * single-blog request fails.
-       */
-
       message.warning(
-        "Could not load the latest blog content. The available blog data has been loaded."
+        "Could not load the complete blog content. The available blog data has been loaded."
       );
     }
   };
@@ -584,7 +577,7 @@ const Blog = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Save
+  | Save Blog
   |--------------------------------------------------------------------------
   */
 
@@ -600,42 +593,47 @@ const Blog = () => {
         values.status ||
         "Draft";
 
+      /*
+       * Normalize form values before sending them.
+       */
       const title =
-        values.title?.trim() ||
-        "";
+        values.title?.trim() || "";
 
       const category =
         values.category || "";
 
       const excerpt =
-        values.excerpt?.trim() ||
-        "";
+        values.excerpt?.trim() || "";
 
       const content =
         values.content || "";
 
       /*
-       * Never save accidental auth errors
-       * inside the blog editor.
+       * --------------------------------------------------------
+       * IMPORTANT PROTECTION
+       * --------------------------------------------------------
+       *
+       * Your previous database record contained:
+       *
+       * Auth initialization failed:
+       * AxiosError: Request failed with status code 401
+       *
+       * That means the frontend was actually putting the
+       * authentication error text into the ReactQuill value.
+       *
+       * Never allow that text to be saved as blog content.
        */
-
       if (
-        isInvalidEditorContent(
-          content
-        )
+        isInvalidEditorContent(content)
       ) {
         message.error(
-          "The editor contains an authentication error instead of blog content. Please clear it and enter the article again."
+          "The blog editor contains an authentication error instead of blog content. Please clear it and enter the article again."
         );
 
         return;
       }
 
-      if (
-        !hasEditorContent(
-          content
-        )
-      ) {
+      if (!hasEditorContent(content)) {
         message.error(
           "Please enter blog content."
         );
@@ -643,28 +641,41 @@ const Blog = () => {
         return;
       }
 
+      /*
+       * Image uploaded through Ant Design Upload.
+       */
       const imageFile =
         values.image?.[0]
-          ?.originFileObj ||
-        null;
+          ?.originFileObj || null;
 
       const blogData = {
         title,
         category,
         status: finalStatus,
-        featured:
-          Boolean(
-            values.featured
-          ),
+        featured: Boolean(
+          values.featured
+        ),
         excerpt,
         content,
         image: imageFile,
       };
 
+      /*
+       * Temporary debugging.
+       *
+       * Keep this while testing the authentication/content
+       * issue. Remove later if you want.
+       */
       console.log(
-        "BLOG DATA BEFORE SAVE:",
-        blogData
+        "BLOG CONTENT BEFORE SAVE:",
+        blogData.content
       );
+
+      /*
+       * --------------------------------------------------------
+       * UPDATE
+       * --------------------------------------------------------
+       */
 
       if (editingPost) {
         await dispatch(
@@ -675,34 +686,48 @@ const Blog = () => {
         ).unwrap();
 
         message.success(
-          finalStatus ===
-            "Published"
-            ? "Blog published successfully."
-            : "Draft saved successfully."
-        );
-      } else {
-        await dispatch(
-          createBlog(
-            blogData
-          )
-        ).unwrap();
-
-        message.success(
-          finalStatus ===
-            "Published"
+          finalStatus === "Published"
             ? "Blog published successfully."
             : "Draft saved successfully."
         );
       }
 
+      /*
+       * --------------------------------------------------------
+       * CREATE
+       * --------------------------------------------------------
+       */
+
+      else {
+        await dispatch(
+          createBlog(blogData)
+        ).unwrap();
+
+        message.success(
+          finalStatus === "Published"
+            ? "Blog published successfully."
+            : "Draft saved successfully."
+        );
+      }
+
+      /*
+       * Close editor.
+       */
       closeModal();
 
+      /*
+       * Refresh list and statistics.
+       */
       loadBlogs();
 
-      dispatch(
-        fetchBlogStats()
-      );
+      dispatch(fetchBlogStats());
     } catch (error) {
+      /*
+       * Ant Design validation errors are automatically
+       * displayed beside their corresponding fields.
+       *
+       * Redux .unwrap() errors are handled here.
+       */
       if (
         error?.errorFields
       ) {
@@ -725,40 +750,37 @@ const Blog = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Delete
+  | Delete Blog
   |--------------------------------------------------------------------------
   */
 
-  const handleDelete =
-    async (id) => {
-      try {
-        await dispatch(
-          deleteBlog(id)
-        ).unwrap();
+  const handleDelete = async (id) => {
+    try {
+      await dispatch(
+        deleteBlog(id)
+      ).unwrap();
 
-        message.success(
-          "Blog deleted successfully."
-        );
+      message.success(
+        "Blog deleted successfully."
+      );
 
-        loadBlogs();
+      loadBlogs();
 
-        dispatch(
-          fetchBlogStats()
-        );
-      } catch (error) {
-        console.error(
-          "Delete blog failed:",
-          error
-        );
+      dispatch(fetchBlogStats());
+    } catch (error) {
+      console.error(
+        "Delete blog failed:",
+        error
+      );
 
-        message.error(
-          getErrorMessage(
-            error,
-            "Failed to delete blog."
-          )
-        );
-      }
-    };
+      message.error(
+        getErrorMessage(
+          error,
+          "Failed to delete blog."
+        )
+      );
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -766,47 +788,42 @@ const Blog = () => {
   |--------------------------------------------------------------------------
   */
 
-  const handleTogglePublish =
-    async (post) => {
-      try {
-        await dispatch(
-          toggleBlogPublish(
-            post.id
-          )
-        ).unwrap();
+  const handleTogglePublish = async (
+    post
+  ) => {
+    try {
+      await dispatch(
+        toggleBlogPublish(post.id)
+      ).unwrap();
 
-        const newStatus =
-          post.status ===
-          "Published"
-            ? "Draft"
-            : "Published";
+      const newStatus =
+        post.status === "Published"
+          ? "Draft"
+          : "Published";
 
-        message.success(
-          newStatus ===
-            "Published"
-            ? "Blog published successfully."
-            : "Blog moved to draft."
-        );
+      message.success(
+        newStatus === "Published"
+          ? "Blog published successfully."
+          : "Blog moved to draft."
+      );
 
-        loadBlogs();
+      loadBlogs();
 
-        dispatch(
-          fetchBlogStats()
-        );
-      } catch (error) {
-        console.error(
-          "Toggle blog status failed:",
-          error
-        );
+      dispatch(fetchBlogStats());
+    } catch (error) {
+      console.error(
+        "Toggle blog status failed:",
+        error
+      );
 
-        message.error(
-          getErrorMessage(
-            error,
-            "Failed to update blog status."
-          )
-        );
-      }
-    };
+      message.error(
+        getErrorMessage(
+          error,
+          "Failed to update blog status."
+        )
+      );
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -814,76 +831,89 @@ const Blog = () => {
   |--------------------------------------------------------------------------
   */
 
-  const handlePreview =
-    async (post) => {
-      setPreviewPost(post);
+  const handlePreview = async (post) => {
+    /*
+     * Show current list data immediately.
+     */
+    setPreviewPost(post);
+    setPreviewOpen(true);
+    setPreviewLoading(true);
 
-      setPreviewOpen(true);
+    try {
+      /*
+       * Fetch the complete blog.
+       */
+      const result = await dispatch(
+        fetchBlogById(post.id)
+      ).unwrap();
 
-      setPreviewLoading(true);
+      const fullBlog =
+        result?.data ||
+        result?.blog ||
+        result;
 
-      try {
-        const result =
-          await dispatch(
-            fetchBlogById(
-              post.id
-            )
-          ).unwrap();
-
-        const fullBlog =
-          result?.data ||
-          result?.blog ||
-          result;
-
-        if (fullBlog) {
-          setPreviewPost(
-            fullBlog
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Failed to load blog preview:",
-          error
-        );
-
-        message.warning(
-          "Could not load the latest blog content."
-        );
-      } finally {
-        setPreviewLoading(
-          false
-        );
+      if (fullBlog) {
+        setPreviewPost(fullBlog);
       }
-    };
+    } catch (error) {
+      console.error(
+        "Failed to load blog preview:",
+        error
+      );
+
+      /*
+       * Do not close the preview.
+       * The list version is still usable.
+       */
+      message.warning(
+        "Could not load the latest blog content."
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
-  | Filters
+  | Search
   |--------------------------------------------------------------------------
   */
 
-  const handleSearch =
-    (event) => {
-      setSearch(
-        event.target.value
-      );
+  const handleSearch = (event) => {
+    setSearch(
+      event.target.value
+    );
 
-      setCurrentPage(1);
-    };
+    setCurrentPage(1);
+  };
 
-  const handleStatusChange =
-    (value) => {
-      setStatusFilter(value);
+  /*
+  |--------------------------------------------------------------------------
+  | Status Filter
+  |--------------------------------------------------------------------------
+  */
 
-      setCurrentPage(1);
-    };
+  const handleStatusChange = (
+    value
+  ) => {
+    setStatusFilter(value);
 
-  const handleCategoryChange =
-    (value) => {
-      setCategoryFilter(value);
+    setCurrentPage(1);
+  };
 
-      setCurrentPage(1);
-    };
+  /*
+  |--------------------------------------------------------------------------
+  | Category Filter
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCategoryChange = (
+    value
+  ) => {
+    setCategoryFilter(value);
+
+    setCurrentPage(1);
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -891,32 +921,20 @@ const Blog = () => {
   |--------------------------------------------------------------------------
   */
 
-  const tableData =
-    useMemo(() => {
-      if (
-        !Array.isArray(
-          blogs
-        )
-      ) {
-        console.error(
-          "Redux blogs is not an array:",
-          blogs
-        );
+  const tableData = useMemo(() => {
+    if (!Array.isArray(blogs)) {
+      return [];
+    }
 
-        return [];
-      }
-
-      return blogs.map(
-        (post) => ({
-          ...post,
-          key: post.id,
-        })
-      );
-    }, [blogs]);
+    return blogs.map((post) => ({
+      ...post,
+      key: post.id,
+    }));
+  }, [blogs]);
 
   /*
   |--------------------------------------------------------------------------
-  | Upload
+  | Upload Configuration
   |--------------------------------------------------------------------------
   */
 
@@ -933,14 +951,22 @@ const Blog = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Columns
+  | Table Columns
   |--------------------------------------------------------------------------
   */
 
   const columns = [
+    /*
+     * ----------------------------------------------------------
+     * TITLE
+     * ----------------------------------------------------------
+     */
+
     {
       title: "Title",
+
       dataIndex: "title",
+
       key: "title",
 
       render: (
@@ -961,28 +987,40 @@ const Blog = () => {
       ),
     },
 
+    /*
+     * ----------------------------------------------------------
+     * CATEGORY
+     * ----------------------------------------------------------
+     */
+
     {
       title: "Category",
+
       dataIndex: "category",
+
       key: "category",
 
-      render: (
-        category
-      ) => (
+      render: (category) => (
         <Tag color="blue">
           {category || "-"}
         </Tag>
       ),
     },
 
+    /*
+     * ----------------------------------------------------------
+     * STATUS
+     * ----------------------------------------------------------
+     */
+
     {
       title: "Status",
+
       dataIndex: "status",
+
       key: "status",
 
-      render: (
-        status
-      ) => (
+      render: (status) => (
         <Tag
           icon={
             status ===
@@ -1004,9 +1042,17 @@ const Blog = () => {
       ),
     },
 
+    /*
+     * ----------------------------------------------------------
+     * VIEWS
+     * ----------------------------------------------------------
+     */
+
     {
       title: "Views",
+
       dataIndex: "views",
+
       key: "views",
 
       render: (views) =>
@@ -1015,9 +1061,17 @@ const Blog = () => {
         ).toLocaleString(),
     },
 
+    /*
+     * ----------------------------------------------------------
+     * DATE
+     * ----------------------------------------------------------
+     */
+
     {
       title: "Date",
+
       dataIndex: "created_at",
+
       key: "created_at",
 
       render: (
@@ -1033,9 +1087,7 @@ const Blog = () => {
         }
 
         const parsedDate =
-          new Date(
-            blogDate
-          );
+          new Date(blogDate);
 
         if (
           Number.isNaN(
@@ -1049,9 +1101,17 @@ const Blog = () => {
       },
     },
 
+    /*
+     * ----------------------------------------------------------
+     * ACTIONS
+     * ----------------------------------------------------------
+     */
+
     {
       title: "Action",
+
       key: "action",
+
       fixed: "right",
 
       render: (
@@ -1059,6 +1119,8 @@ const Blog = () => {
         record
       ) => (
         <Space>
+          {/* VIEW */}
+
           <Tooltip title="View">
             <Button
               type="text"
@@ -1066,12 +1128,12 @@ const Blog = () => {
                 <EyeOutlined />
               }
               onClick={() =>
-                handlePreview(
-                  record
-                )
+                handlePreview(record)
               }
             />
           </Tooltip>
+
+          {/* EDIT */}
 
           <Tooltip title="Edit">
             <Button
@@ -1080,12 +1142,12 @@ const Blog = () => {
                 <EditOutlined />
               }
               onClick={() =>
-                handleEdit(
-                  record
-                )
+                handleEdit(record)
               }
             />
           </Tooltip>
+
+          {/* PUBLISH / DRAFT */}
 
           <Tooltip
             title={
@@ -1097,9 +1159,7 @@ const Blog = () => {
           >
             <Button
               type="text"
-              loading={
-                toggling
-              }
+              loading={toggling}
               icon={
                 record.status ===
                 "Published" ? (
@@ -1115,6 +1175,8 @@ const Blog = () => {
               }
             />
           </Tooltip>
+
+          {/* DELETE */}
 
           <Popconfirm
             title="Delete this blog?"
@@ -1134,9 +1196,6 @@ const Blog = () => {
               <Button
                 type="text"
                 danger
-                loading={
-                  deleting
-                }
                 icon={
                   <DeleteOutlined />
                 }
@@ -1156,13 +1215,14 @@ const Blog = () => {
 
   return (
     <div>
-      {/* Header */}
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
       <div
         style={{
           display: "flex",
-          justifyContent:
-            "space-between",
+          justifyContent: "space-between",
           alignItems: "center",
           gap: 16,
           flexWrap: "wrap",
@@ -1180,10 +1240,8 @@ const Blog = () => {
           </Title>
 
           <Text type="secondary">
-            Create, edit, publish,
-            and manage public
-            FloodGuard blog
-            articles.
+            Create, edit, publish, and manage
+            public FloodGuard blog articles.
           </Text>
         </div>
 
@@ -1201,7 +1259,9 @@ const Blog = () => {
         </Button>
       </div>
 
-      {/* Statistics */}
+      {/* ======================================================
+          STATISTICS
+      ====================================================== */}
 
       <Row
         gutter={[16, 16]}
@@ -1218,8 +1278,7 @@ const Blog = () => {
             <Statistic
               title="Total Blogs"
               value={
-                stats?.total ||
-                0
+                stats?.total || 0
               }
               prefix={
                 <FileTextOutlined />
@@ -1237,8 +1296,7 @@ const Blog = () => {
             <Statistic
               title="Published"
               value={
-                stats?.published ||
-                0
+                stats?.published || 0
               }
               prefix={
                 <CheckCircleOutlined />
@@ -1256,8 +1314,7 @@ const Blog = () => {
             <Statistic
               title="Drafts"
               value={
-                stats?.drafts ||
-                0
+                stats?.drafts || 0
               }
               prefix={
                 <ClockCircleOutlined />
@@ -1275,8 +1332,7 @@ const Blog = () => {
             <Statistic
               title="Featured"
               value={
-                stats?.featured ||
-                0
+                stats?.featured || 0
               }
               prefix={
                 <StarOutlined />
@@ -1286,12 +1342,15 @@ const Blog = () => {
         </Col>
       </Row>
 
-      {/* Blog List */}
+      {/* ======================================================
+          BLOG LIST
+      ====================================================== */}
 
       <Card
         title={
           <Space>
             <Badge status="processing" />
+
             <span>
               Blog Articles
             </span>
@@ -1304,7 +1363,6 @@ const Blog = () => {
             }
             onClick={() => {
               loadBlogs();
-
               dispatch(
                 fetchBlogStats()
               );
@@ -1314,7 +1372,9 @@ const Blog = () => {
           </Button>
         }
       >
-        {/* Filters */}
+        {/* ====================================================
+            FILTERS
+        ==================================================== */}
 
         <Row
           gutter={[12, 12]}
@@ -1350,9 +1410,7 @@ const Blog = () => {
               style={{
                 width: "100%",
               }}
-              value={
-                statusFilter
-              }
+              value={statusFilter}
               onChange={
                 handleStatusChange
               }
@@ -1365,10 +1423,8 @@ const Blog = () => {
 
                 ...BLOG_STATUSES.map(
                   (status) => ({
-                    value:
-                      status,
-                    label:
-                      status,
+                    value: status,
+                    label: status,
                   })
                 ),
               ]}
@@ -1399,13 +1455,9 @@ const Blog = () => {
                 },
 
                 ...BLOG_CATEGORIES.map(
-                  (
-                    category
-                  ) => ({
-                    value:
-                      category,
-                    label:
-                      category,
+                  (category) => ({
+                    value: category,
+                    label: category,
                   })
                 ),
               ]}
@@ -1413,14 +1465,14 @@ const Blog = () => {
           </Col>
         </Row>
 
-        {/* Table */}
+        {/* ====================================================
+            TABLE
+        ==================================================== */}
 
         <Table
           rowKey="id"
           columns={columns}
-          dataSource={
-            tableData
-          }
+          dataSource={tableData}
           loading={loading}
           locale={{
             emptyText: (
@@ -1460,9 +1512,12 @@ const Blog = () => {
               page,
               size
             ) => {
+              setCurrentPage(
+                page
+              );
+
               if (
-                size !==
-                pageSize
+                size !== pageSize
               ) {
                 setPageSize(
                   size
@@ -1471,13 +1526,7 @@ const Blog = () => {
                 setCurrentPage(
                   1
                 );
-
-                return;
               }
-
-              setCurrentPage(
-                page
-              );
             },
           }}
           scroll={{
@@ -1486,7 +1535,9 @@ const Blog = () => {
         />
       </Card>
 
-      {/* Create / Edit Modal */}
+      {/* ======================================================
+          CREATE / EDIT MODAL
+      ====================================================== */}
 
       <Modal
         title={
@@ -1506,6 +1557,10 @@ const Blog = () => {
           form={form}
           layout="vertical"
         >
+          {/* ==================================================
+              TITLE
+          ================================================== */}
+
           <Form.Item
             label="Title"
             name="title"
@@ -1532,6 +1587,10 @@ const Blog = () => {
             />
           </Form.Item>
 
+          {/* ==================================================
+              CATEGORY
+          ================================================== */}
+
           <Form.Item
             label="Category"
             name="category"
@@ -1547,17 +1606,17 @@ const Blog = () => {
               size="large"
               placeholder="Select category"
               options={BLOG_CATEGORIES.map(
-                (
-                  category
-                ) => ({
-                  value:
-                    category,
-                  label:
-                    category,
+                (category) => ({
+                  value: category,
+                  label: category,
                 })
               )}
             />
           </Form.Item>
+
+          {/* ==================================================
+              IMAGE
+          ================================================== */}
 
           <Form.Item
             label="Featured Image"
@@ -1566,8 +1625,7 @@ const Blog = () => {
             getValueFromEvent={(
               event
             ) =>
-              event?.fileList ||
-              []
+              event?.fileList || []
             }
           >
             <Upload
@@ -1590,6 +1648,10 @@ const Blog = () => {
               </div>
             </Upload>
           </Form.Item>
+
+          {/* ==================================================
+              EXCERPT
+          ================================================== */}
 
           <Form.Item
             label="Short Description"
@@ -1617,36 +1679,44 @@ const Blog = () => {
             />
           </Form.Item>
 
+          {/* ==================================================
+              CONTENT
+          ================================================== */}
+
           <Form.Item
             label="Content"
             name="content"
             rules={[
               {
-                validator:
-                  async (
-                    _,
-                    value
-                  ) => {
-                    if (
-                      isInvalidEditorContent(
-                        value
-                      )
-                    ) {
-                      throw new Error(
-                        "The editor contains an authentication error. Please clear it and enter your blog content."
-                      );
-                    }
+                validator: async (
+                  _,
+                  value
+                ) => {
+                  /*
+                   * Prevent the exact authentication
+                   * error from being considered valid
+                   * editor content.
+                   */
+                  if (
+                    isInvalidEditorContent(
+                      value
+                    )
+                  ) {
+                    throw new Error(
+                      "The editor contains an authentication error. Please clear it and enter your blog content."
+                    );
+                  }
 
-                    if (
-                      !hasEditorContent(
-                        value
-                      )
-                    ) {
-                      throw new Error(
-                        "Please enter blog content."
-                      );
-                    }
-                  },
+                  if (
+                    !hasEditorContent(
+                      value
+                    )
+                  ) {
+                    throw new Error(
+                      "Please enter blog content."
+                    );
+                  }
+                },
               },
             ]}
           >
@@ -1666,6 +1736,10 @@ const Blog = () => {
             />
           </Form.Item>
 
+          {/* ==================================================
+              STATUS
+          ================================================== */}
+
           <Form.Item
             label="Publication Status"
             name="status"
@@ -1677,15 +1751,18 @@ const Blog = () => {
                   value: "Draft",
                   label: "Draft",
                 },
+
                 {
-                  value:
-                    "Published",
-                  label:
-                    "Published",
+                  value: "Published",
+                  label: "Published",
                 },
               ]}
             />
           </Form.Item>
+
+          {/* ==================================================
+              FEATURED
+          ================================================== */}
 
           <Form.Item
             label="Featured Blog"
@@ -1699,6 +1776,10 @@ const Blog = () => {
           </Form.Item>
 
           <Divider />
+
+          {/* ==================================================
+              ACTIONS
+          ================================================== */}
 
           <div
             style={{
@@ -1755,19 +1836,16 @@ const Blog = () => {
         </Form>
       </Modal>
 
-      {/* Preview */}
+      {/* ======================================================
+          PREVIEW MODAL
+      ====================================================== */}
 
       <Modal
         title="Blog Preview"
         open={previewOpen}
         onCancel={() => {
-          setPreviewOpen(
-            false
-          );
-
-          setPreviewPost(
-            null
-          );
+          setPreviewOpen(false);
+          setPreviewPost(null);
         }}
         footer={null}
         width={850}
@@ -1777,8 +1855,7 @@ const Blog = () => {
             style={{
               minHeight: 300,
               display: "flex",
-              alignItems:
-                "center",
+              alignItems: "center",
               justifyContent:
                 "center",
             }}
@@ -1787,6 +1864,8 @@ const Blog = () => {
           </div>
         ) : previewPost ? (
           <div>
+            {/* IMAGE */}
+
             {previewPost.image_url && (
               <img
                 src={getImageUrl(
@@ -1796,22 +1875,21 @@ const Blog = () => {
                   previewPost.title ||
                   "Blog image"
                 }
-                onError={(
-                  event
-                ) => {
+                onError={(event) => {
                   event.currentTarget.style.display =
                     "none";
                 }}
                 style={{
                   width: "100%",
                   maxHeight: 400,
-                  objectFit:
-                    "cover",
+                  objectFit: "cover",
                   borderRadius: 8,
                   marginBottom: 20,
                 }}
               />
             )}
+
+            {/* CATEGORY / STATUS */}
 
             <Space
               style={{
@@ -1852,11 +1930,15 @@ const Blog = () => {
               )}
             </Space>
 
+            {/* TITLE */}
+
             <Title level={2}>
               {
                 previewPost.title
               }
             </Title>
+
+            {/* DATE / VIEWS */}
 
             <Space>
               <Text type="secondary">
@@ -1882,6 +1964,8 @@ const Blog = () => {
 
             <Divider />
 
+            {/* EXCERPT */}
+
             {previewPost.excerpt && (
               <>
                 <Paragraph strong>
@@ -1893,6 +1977,8 @@ const Blog = () => {
                 <Divider />
               </>
             )}
+
+            {/* CONTENT */}
 
             {isInvalidEditorContent(
               previewPost.content
