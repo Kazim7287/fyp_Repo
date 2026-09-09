@@ -11,17 +11,27 @@ const {
   getBlogStats,
 } = require("../controllers/blog.controller");
 
-const upload = require("../middleware/upload.middleware");
+const {
+  uploadBlogImage,
+} = require("../middleware/upload.middleware");
 
 const router = express.Router();
 
 // =========================================================
-// GET
+// GET ALL BLOGS
 // =========================================================
 
 router.get("/", getBlogs);
 
+// =========================================================
+// GET BLOG STATS
+// =========================================================
+
 router.get("/stats", getBlogStats);
+
+// =========================================================
+// GET SINGLE BLOG
+// =========================================================
 
 router.get("/:id", getBlog);
 
@@ -31,7 +41,7 @@ router.get("/:id", getBlog);
 
 router.post(
   "/",
-  upload.single("image"),
+  uploadBlogImage.single("image"),
   createBlog
 );
 
@@ -41,12 +51,12 @@ router.post(
 
 router.put(
   "/:id",
-  upload.single("image"),
+  uploadBlogImage.single("image"),
   updateBlog
 );
 
 // =========================================================
-// DELETE
+// DELETE BLOG
 // =========================================================
 
 router.delete(
