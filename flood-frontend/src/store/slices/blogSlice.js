@@ -1,21 +1,11 @@
-import {
-  createAsyncThunk,
-  createSlice,
-} from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import blogApi from "../../api/blogApi";
 
-import {
-  getBlogsApi,
-  getBlogApi,
-  getBlogStatsApi,
-  createBlogApi,
-  updateBlogApi,
-  deleteBlogApi,
-  toggleBlogPublishApi,
-} from "../../api/blogApi";
-
-// =========================================================
-// INITIAL STATE
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Initial State
+|--------------------------------------------------------------------------
+*/
 
 const initialState = {
   blogs: [],
@@ -37,7 +27,6 @@ const initialState = {
     totalPages: 0,
   },
 
-  // Loading states
   loading: false,
   selectedBlogLoading: false,
   statsLoading: false,
@@ -50,33 +39,70 @@ const initialState = {
   error: null,
 };
 
-// =========================================================
-// HELPER
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
 
-const getErrorMessage = (error, fallback) => {
+const getApiError = (error, fallback) => {
   return (
     error?.response?.data?.message ||
+    error?.response?.data?.error ||
     error?.message ||
     fallback
   );
 };
 
-// =========================================================
-// GET BLOGS
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Fetch Blogs
+|--------------------------------------------------------------------------
+*/
 
 export const fetchBlogs = createAsyncThunk(
   "blog/fetchBlogs",
-
-  async (filters = {}, { rejectWithValue }) => {
+  async (
+    {
+      search = "",
+      status = "all",
+      category = "all",
+      page = 1,
+      limit = 8,
+    } = {},
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await getBlogsApi(filters);
+      const response = await blogApi.get("/blogs", {
+        params: {
+          search: search || undefined,
+          status:
+            status && status !== "all"
+              ? status
+              : undefined,
+          category:
+            category && category !== "all"
+              ? category
+              : undefined,
+          page,
+          limit,
+        },
+      });
 
-      return response;
+      console.log(
+        "BLOGS API RESPONSE:",
+        response.data
+      );
+
+      return response.data;
     } catch (error) {
+      console.error(
+        "Fetch blogs failed:",
+        error
+      );
+
       return rejectWithValue(
-        getErrorMessage(
+        getApiError(
           error,
           "Failed to load blogs."
         )
@@ -85,27 +111,29 @@ export const fetchBlogs = createAsyncThunk(
   }
 );
 
-// =========================================================
-// GET SINGLE BLOG
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Fetch Single Blog
+|--------------------------------------------------------------------------
+*/
 
 export const fetchBlogById = createAsyncThunk(
   "blog/fetchBlogById",
-
   async (id, { rejectWithValue }) => {
     try {
-      if (!id) {
-        return rejectWithValue(
-          "Blog ID is required."
-        );
-      }
+      const response = await blogApi.get(
+        `/blogs/${id}`
+      );
 
-      const response = await getBlogApi(id);
-
-      return response;
+      return response.data;
     } catch (error) {
+      console.error(
+        "Fetch blog failed:",
+        error
+      );
+
       return rejectWithValue(
-        getErrorMessage(
+        getApiError(
           error,
           "Failed to load blog."
         )
@@ -114,21 +142,29 @@ export const fetchBlogById = createAsyncThunk(
   }
 );
 
-// =========================================================
-// GET BLOG STATS
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Fetch Statistics
+|--------------------------------------------------------------------------
+*/
 
 export const fetchBlogStats = createAsyncThunk(
   "blog/fetchBlogStats",
-
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getBlogStatsApi();
+      const response = await blogApi.get(
+        "/blogs/stats"
+      );
 
-      return response;
+      return response.data;
     } catch (error) {
+      console.error(
+        "Fetch blog stats failed:",
+        error
+      );
+
       return rejectWithValue(
-        getErrorMessage(
+        getApiError(
           error,
           "Failed to load blog statistics."
         )
@@ -137,28 +173,74 @@ export const fetchBlogStats = createAsyncThunk(
   }
 );
 
-// =========================================================
-// CREATE BLOG
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Create Blog
+|--------------------------------------------------------------------------
+*/
 
 export const createBlog = createAsyncThunk(
   "blog/createBlog",
-
   async (blogData, { rejectWithValue }) => {
     try {
-      if (!blogData) {
-        return rejectWithValue(
-          "Blog data is required."
+      const formData = new FormData();
+
+      formData.append(
+        "title",
+        blogData.title || ""
+      );
+
+      formData.append(
+        "category",
+        blogData.category || ""
+      );
+
+      formData.append(
+        "status",
+        blogData.status || "Draft"
+      );
+
+      formData.append(
+        "featured",
+        String(Boolean(blogData.featured))
+      );
+
+      formData.append(
+        "excerpt",
+        blogData.excerpt || ""
+      );
+
+      formData.append(
+        "content",
+        blogData.content || ""
+      );
+
+      if (blogData.image) {
+        formData.append(
+          "image",
+          blogData.image
         );
       }
 
-      const response =
-        await createBlogApi(blogData);
+      const response = await blogApi.post(
+        "/blogs",
+        formData
+      );
 
-      return response;
+      console.log(
+        "CREATE BLOG RESPONSE:",
+        response.data
+      );
+
+      return response.data;
     } catch (error) {
+      console.error(
+        "Create blog failed:",
+        error
+      );
+
       return rejectWithValue(
-        getErrorMessage(
+        getApiError(
           error,
           "Failed to create blog."
         )
@@ -167,37 +249,77 @@ export const createBlog = createAsyncThunk(
   }
 );
 
-// =========================================================
-// UPDATE BLOG
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Update Blog
+|--------------------------------------------------------------------------
+*/
 
 export const updateBlog = createAsyncThunk(
   "blog/updateBlog",
-
   async (
-    { id, data },
+    { id, data: blogData },
     { rejectWithValue }
   ) => {
     try {
-      if (!id) {
-        return rejectWithValue(
-          "Blog ID is required."
+      const formData = new FormData();
+
+      formData.append(
+        "title",
+        blogData.title || ""
+      );
+
+      formData.append(
+        "category",
+        blogData.category || ""
+      );
+
+      formData.append(
+        "status",
+        blogData.status || "Draft"
+      );
+
+      formData.append(
+        "featured",
+        String(Boolean(blogData.featured))
+      );
+
+      formData.append(
+        "excerpt",
+        blogData.excerpt || ""
+      );
+
+      formData.append(
+        "content",
+        blogData.content || ""
+      );
+
+      if (blogData.image) {
+        formData.append(
+          "image",
+          blogData.image
         );
       }
 
-      if (!data) {
-        return rejectWithValue(
-          "Blog data is required."
-        );
-      }
+      const response = await blogApi.put(
+        `/blogs/${id}`,
+        formData
+      );
 
-      const response =
-        await updateBlogApi(id, data);
+      console.log(
+        "UPDATE BLOG RESPONSE:",
+        response.data
+      );
 
-      return response;
+      return response.data;
     } catch (error) {
+      console.error(
+        "Update blog failed:",
+        error
+      );
+
       return rejectWithValue(
-        getErrorMessage(
+        getApiError(
           error,
           "Failed to update blog."
         )
@@ -206,31 +328,33 @@ export const updateBlog = createAsyncThunk(
   }
 );
 
-// =========================================================
-// DELETE BLOG
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Delete Blog
+|--------------------------------------------------------------------------
+*/
 
 export const deleteBlog = createAsyncThunk(
   "blog/deleteBlog",
-
   async (id, { rejectWithValue }) => {
     try {
-      if (!id) {
-        return rejectWithValue(
-          "Blog ID is required."
-        );
-      }
-
       const response =
-        await deleteBlogApi(id);
+        await blogApi.delete(
+          `/blogs/${id}`
+        );
 
       return {
-        id,
-        ...response,
+        ...response.data,
+        deletedId: id,
       };
     } catch (error) {
+      console.error(
+        "Delete blog failed:",
+        error
+      );
+
       return rejectWithValue(
-        getErrorMessage(
+        getApiError(
           error,
           "Failed to delete blog."
         )
@@ -239,40 +363,44 @@ export const deleteBlog = createAsyncThunk(
   }
 );
 
-// =========================================================
-// TOGGLE PUBLISH
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Toggle Publish
+|--------------------------------------------------------------------------
+*/
 
 export const toggleBlogPublish =
   createAsyncThunk(
     "blog/toggleBlogPublish",
-
     async (id, { rejectWithValue }) => {
       try {
-        if (!id) {
-          return rejectWithValue(
-            "Blog ID is required."
-          );
-        }
-
         const response =
-          await toggleBlogPublishApi(id);
+          await blogApi.patch(
+            `/blogs/${id}/toggle-publish`
+          );
 
-        return response;
+        return response.data;
       } catch (error) {
+        console.error(
+          "Toggle blog failed:",
+          error
+        );
+
         return rejectWithValue(
-          getErrorMessage(
+          getApiError(
             error,
-            "Failed to update publication status."
+            "Failed to update blog status."
           )
         );
       }
     }
   );
 
-// =========================================================
-// SLICE
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Slice
+|--------------------------------------------------------------------------
+*/
 
 const blogSlice = createSlice({
   name: "blog",
@@ -280,36 +408,21 @@ const blogSlice = createSlice({
   initialState,
 
   reducers: {
-    // -------------------------------------------------------
-    // CLEAR ERROR
-    // -------------------------------------------------------
-
     clearBlogError: (state) => {
       state.error = null;
     },
 
-    // -------------------------------------------------------
-    // CLEAR SELECTED BLOG
-    // -------------------------------------------------------
-
     clearSelectedBlog: (state) => {
       state.selectedBlog = null;
-      state.selectedBlogLoading = false;
-    },
-
-    // -------------------------------------------------------
-    // RESET BLOG STATE
-    // -------------------------------------------------------
-
-    resetBlogState: () => {
-      return initialState;
     },
   },
 
   extraReducers: (builder) => {
-    // =======================================================
-    // FETCH BLOGS
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Blogs
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
@@ -329,32 +442,42 @@ const blogSlice = createSlice({
             action.payload || {};
 
           /*
-           * Supports:
+           * Backend response:
            *
            * {
            *   success: true,
-           *   data: {
-           *     blogs: [...]
-           *   },
+           *   data: [...],
            *   pagination: {...}
-           * }
-           *
-           * and:
-           *
-           * {
-           *   blogs: [...]
            * }
            */
 
-          state.blogs =
-            payload?.data?.blogs ||
-            payload?.blogs ||
-            [];
+          state.blogs = Array.isArray(
+            payload.data
+          )
+            ? payload.data
+            : [];
 
-          state.pagination =
-            payload?.pagination ||
-            payload?.data?.pagination ||
-            state.pagination;
+          state.pagination = {
+            page:
+              Number(
+                payload.pagination?.page
+              ) || 1,
+
+            limit:
+              Number(
+                payload.pagination?.limit
+              ) || 8,
+
+            total:
+              Number(
+                payload.pagination?.total
+              ) || 0,
+
+            totalPages:
+              Number(
+                payload.pagination?.totalPages
+              ) || 0,
+          };
         }
       )
 
@@ -363,21 +486,26 @@ const blogSlice = createSlice({
         (state, action) => {
           state.loading = false;
 
+          state.blogs = [];
+
           state.error =
             action.payload ||
             "Failed to load blogs.";
         }
       );
 
-    // =======================================================
-    // FETCH SINGLE BLOG
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Single Blog
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
         fetchBlogById.pending,
         (state) => {
-          state.selectedBlogLoading = true;
+          state.selectedBlogLoading =
+            true;
           state.error = null;
         }
       )
@@ -385,23 +513,24 @@ const blogSlice = createSlice({
       .addCase(
         fetchBlogById.fulfilled,
         (state, action) => {
-          state.selectedBlogLoading = false;
+          state.selectedBlogLoading =
+            false;
 
           const payload =
             action.payload || {};
 
           state.selectedBlog =
-            payload?.data?.blog ||
-            payload?.data ||
-            payload?.blog ||
-            null;
+            payload.data ||
+            payload.blog ||
+            payload;
         }
       )
 
       .addCase(
         fetchBlogById.rejected,
         (state, action) => {
-          state.selectedBlogLoading = false;
+          state.selectedBlogLoading =
+            false;
 
           state.error =
             action.payload ||
@@ -409,9 +538,11 @@ const blogSlice = createSlice({
         }
       );
 
-    // =======================================================
-    // FETCH BLOG STATS
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Statistics
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
@@ -429,43 +560,10 @@ const blogSlice = createSlice({
           const payload =
             action.payload || {};
 
-          const stats =
-            payload?.data?.stats ||
-            payload?.data ||
-            payload?.stats ||
-            {};
-
-          state.stats = {
-            total: Number(
-              stats.total ??
-              stats.total_posts ??
-              0
-            ),
-
-            published: Number(
-              stats.published ??
-              stats.published_posts ??
-              0
-            ),
-
-            drafts: Number(
-              stats.drafts ??
-              stats.draft_posts ??
-              0
-            ),
-
-            featured: Number(
-              stats.featured ??
-              stats.featured_posts ??
-              0
-            ),
-
-            totalViews: Number(
-              stats.totalViews ??
-              stats.total_views ??
-              0
-            ),
-          };
+          state.stats =
+            payload.data ||
+            payload.stats ||
+            payload;
         }
       )
 
@@ -480,9 +578,11 @@ const blogSlice = createSlice({
         }
       );
 
-    // =======================================================
-    // CREATE BLOG
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Create
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
@@ -495,8 +595,23 @@ const blogSlice = createSlice({
 
       .addCase(
         createBlog.fulfilled,
-        (state) => {
+        (state, action) => {
           state.creating = false;
+
+          const payload =
+            action.payload || {};
+
+          const newBlog =
+            payload.data ||
+            payload.blog;
+
+          if (newBlog) {
+            state.blogs.unshift(
+              newBlog
+            );
+
+            state.pagination.total += 1;
+          }
         }
       )
 
@@ -511,9 +626,11 @@ const blogSlice = createSlice({
         }
       );
 
-    // =======================================================
-    // UPDATE BLOG
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Update
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
@@ -526,8 +643,42 @@ const blogSlice = createSlice({
 
       .addCase(
         updateBlog.fulfilled,
-        (state) => {
+        (state, action) => {
           state.updating = false;
+
+          const payload =
+            action.payload || {};
+
+          const updatedBlog =
+            payload.data ||
+            payload.blog;
+
+          if (!updatedBlog) {
+            return;
+          }
+
+          const index =
+            state.blogs.findIndex(
+              (blog) =>
+                String(blog.id) ===
+                String(updatedBlog.id)
+            );
+
+          if (index !== -1) {
+            state.blogs[index] =
+              updatedBlog;
+          }
+
+          if (
+            state.selectedBlog &&
+            String(
+              state.selectedBlog.id
+            ) ===
+              String(updatedBlog.id)
+          ) {
+            state.selectedBlog =
+              updatedBlog;
+          }
         }
       )
 
@@ -542,9 +693,11 @@ const blogSlice = createSlice({
         }
       );
 
-    // =======================================================
-    // DELETE BLOG
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Delete
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
@@ -561,7 +714,7 @@ const blogSlice = createSlice({
           state.deleting = false;
 
           const deletedId =
-            action.payload?.id;
+            action.payload?.deletedId;
 
           state.blogs =
             state.blogs.filter(
@@ -570,26 +723,13 @@ const blogSlice = createSlice({
                 String(deletedId)
             );
 
-          /*
-           * If the deleted blog is currently
-           * selected, clear it.
-           */
-
-          if (
-            state.selectedBlog &&
-            String(state.selectedBlog.id) ===
-              String(deletedId)
-          ) {
-            state.selectedBlog = null;
-          }
-
-          /*
-           * Keep total count correct locally.
-           */
-
-          if (state.pagination.total > 0) {
-            state.pagination.total -= 1;
-          }
+          state.pagination.total =
+            Math.max(
+              0,
+              Number(
+                state.pagination.total
+              ) - 1
+            );
         }
       )
 
@@ -604,9 +744,11 @@ const blogSlice = createSlice({
         }
       );
 
-    // =======================================================
-    // TOGGLE PUBLISH
-    // =======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | Toggle Publish
+    |--------------------------------------------------------------------------
+    */
 
     builder
       .addCase(
@@ -622,42 +764,27 @@ const blogSlice = createSlice({
         (state, action) => {
           state.toggling = false;
 
-          /*
-           * If the backend returns the updated blog,
-           * update it immediately in Redux.
-           */
+          const payload =
+            action.payload || {};
 
           const updatedBlog =
-            action.payload?.data?.blog ||
-            action.payload?.data ||
-            action.payload?.blog ||
-            null;
+            payload.data ||
+            payload.blog;
 
-          if (updatedBlog?.id) {
-            const index =
-              state.blogs.findIndex(
-                (blog) =>
-                  String(blog.id) ===
-                  String(updatedBlog.id)
-              );
+          if (!updatedBlog) {
+            return;
+          }
 
-            if (index !== -1) {
-              state.blogs[index] = {
-                ...state.blogs[index],
-                ...updatedBlog,
-              };
-            }
-
-            if (
-              state.selectedBlog &&
-              String(state.selectedBlog.id) ===
+          const index =
+            state.blogs.findIndex(
+              (blog) =>
+                String(blog.id) ===
                 String(updatedBlog.id)
-            ) {
-              state.selectedBlog = {
-                ...state.selectedBlog,
-                ...updatedBlog,
-              };
-            }
+            );
+
+          if (index !== -1) {
+            state.blogs[index] =
+              updatedBlog;
           }
         }
       )
@@ -669,59 +796,41 @@ const blogSlice = createSlice({
 
           state.error =
             action.payload ||
-            "Failed to update publication status.";
+            "Failed to update blog status.";
         }
       );
   },
 });
 
-// =========================================================
-// EXPORT ACTIONS
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Actions
+|--------------------------------------------------------------------------
+*/
 
 export const {
   clearBlogError,
   clearSelectedBlog,
-  resetBlogState,
 } = blogSlice.actions;
 
-// =========================================================
-// EXPORT SELECTORS
-// =========================================================
-//
-// IMPORTANT:
-//
-// store.js:
-//
-// reducer: {
-//   blogs: blogReducer
-// }
-//
-// Therefore:
-//
-// state.blogs
-//
-// is the correct Redux state path.
-//
-// =========================================================
+/*
+|--------------------------------------------------------------------------
+| Selectors
+|--------------------------------------------------------------------------
+*/
 
 export const selectBlogs = (state) =>
   state.blogs.blogs;
 
-export const selectSelectedBlog = (state) =>
-  state.blogs.selectedBlog;
-
 export const selectBlogStats = (state) =>
   state.blogs.stats;
 
-export const selectBlogPagination = (state) =>
-  state.blogs.pagination;
+export const selectBlogPagination = (
+  state
+) => state.blogs.pagination;
 
 export const selectBlogLoading = (state) =>
   state.blogs.loading;
-
-export const selectSelectedBlogLoading = (state) =>
-  state.blogs.selectedBlogLoading;
 
 export const selectBlogCreating = (state) =>
   state.blogs.creating;
@@ -735,14 +844,21 @@ export const selectBlogDeleting = (state) =>
 export const selectBlogToggling = (state) =>
   state.blogs.toggling;
 
-export const selectBlogStatsLoading = (state) =>
-  state.blogs.statsLoading;
-
 export const selectBlogError = (state) =>
   state.blogs.error;
 
-// =========================================================
-// EXPORT REDUCER
-// =========================================================
+export const selectSelectedBlog = (
+  state
+) => state.blogs.selectedBlog;
+
+export const selectSelectedBlogLoading = (
+  state
+) => state.blogs.selectedBlogLoading;
+
+/*
+|--------------------------------------------------------------------------
+| Export
+|--------------------------------------------------------------------------
+*/
 
 export default blogSlice.reducer;
