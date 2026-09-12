@@ -1,4 +1,8 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   Card,
@@ -18,6 +22,7 @@ import {
   Upload,
   Tooltip,
   Divider,
+  Spin,
 } from "antd";
 
 import {
@@ -37,110 +42,29 @@ import {
   ExclamationCircleOutlined,
 } from "@ant-design/icons";
 
-const { Title, Text, Paragraph } = Typography;
+import { useDispatch, useSelector } from "react-redux";
+
+import {
+  fetchResearch,
+  fetchResearchStats,
+  addResearch,
+  addResearchPdf,
+  editResearch,
+  removeResearch,
+  changeResearchStatus,
+  selectResearch,
+  selectResearchStats,
+  selectResearchLoading,
+  selectResearchStatsLoading,
+  selectResearchSubmitting,
+  selectResearchPdfUploading,
+  selectResearchDeleting,
+} from "../store/slices/researchSlice";
+
+const { Title, Text, Paragraph } =
+  Typography;
+
 const { TextArea } = Input;
-
-/* =========================================================
-   SAMPLE RESEARCH DATA
-========================================================= */
-
-const initialResearch = [
-  {
-    id: 1,
-
-    title:
-      "IoT and AI-Based Flood Early Warning System",
-
-    authors:
-      "FloodGuard Research Team",
-
-    category: "AI",
-
-    abstract:
-      "Research on integrating IoT sensor networks, environmental data, machine learning, and time-series forecasting for flood early warning.",
-
-    publicationDate:
-      "2026-08-18",
-
-    status: "Published",
-
-    image: null,
-
-    pdf: null,
-  },
-
-  {
-    id: 2,
-
-    title:
-      "Real-Time IoT Sensor Network for Flood Monitoring",
-
-    authors:
-      "FloodGuard IoT Research Team",
-
-    category: "IoT",
-
-    abstract:
-      "A study on real-time environmental monitoring using distributed IoT sensor nodes for water-level, rainfall, temperature, humidity, soil-moisture, and flow-rate measurements.",
-
-    publicationDate:
-      "2026-08-14",
-
-    status: "Published",
-
-    image: null,
-
-    pdf: null,
-  },
-
-  {
-    id: 3,
-
-    title:
-      "GIS-Based Flood Hazard Mapping",
-
-    authors:
-      "FloodGuard GIS Research Team",
-
-    category: "GIS",
-
-    abstract:
-      "GIS-based spatial analysis for identifying flood-prone regions using elevation, land cover, drainage, rainfall, and hydrological datasets.",
-
-    publicationDate:
-      "2026-08-10",
-
-    status: "Published",
-
-    image: null,
-
-    pdf: null,
-  },
-
-  {
-    id: 4,
-
-    title:
-      "Hydrological Modeling for River Flood Forecasting",
-
-    authors:
-      "FloodGuard Hydrology Team",
-
-    category: "Hydrology",
-
-    abstract:
-      "Research focused on hydrological parameters, river water-level dynamics, rainfall-runoff relationships, and short-term flood forecasting.",
-
-    publicationDate:
-      "2026-08-05",
-
-    status: "Draft",
-
-    image: null,
-
-    pdf: null,
-  },
-];
 
 /* =========================================================
    STATUS TAG
@@ -181,10 +105,33 @@ const getCategoryTag = (category) => {
   };
 
   return (
-    <Tag color={colors[category] || "default"}>
+    <Tag
+      color={
+        colors[category] || "default"
+      }
+    >
       {category}
     </Tag>
   );
+};
+
+/* =========================================================
+   API IMAGE URL
+========================================================= */
+
+const getFileUrl = (fileUrl) => {
+  if (!fileUrl) {
+    return null;
+  }
+
+  if (
+    fileUrl.startsWith("http://") ||
+    fileUrl.startsWith("https://")
+  ) {
+    return fileUrl;
+  }
+
+  return fileUrl;
 };
 
 /* =========================================================
@@ -192,8 +139,43 @@ const getCategoryTag = (category) => {
 ========================================================= */
 
 const Research = () => {
-  const [research, setResearch] =
-    useState(initialResearch);
+  const dispatch = useDispatch();
+
+  /* =======================================================
+     REDUX STATE
+  ======================================================= */
+
+  const research = useSelector(
+    selectResearch
+  );
+
+  const stats = useSelector(
+    selectResearchStats
+  );
+
+  const loading = useSelector(
+    selectResearchLoading
+  );
+
+  const statsLoading = useSelector(
+    selectResearchStatsLoading
+  );
+
+  const submitting = useSelector(
+    selectResearchSubmitting
+  );
+
+  const pdfUploading = useSelector(
+    selectResearchPdfUploading
+  );
+
+  const deleting = useSelector(
+    selectResearchDeleting
+  );
+
+  /* =======================================================
+     LOCAL UI STATE
+  ======================================================= */
 
   const [searchText, setSearchText] =
     useState("");
@@ -219,25 +201,68 @@ const Research = () => {
   const [form] = Form.useForm();
 
   /* =======================================================
-     FILTER DATA
+     LOAD RESEARCH
+  ======================================================= */
+
+  useEffect(() => {
+    dispatch(
+      fetchResearch({
+        search: searchText,
+        status: statusFilter,
+        category: categoryFilter,
+      })
+    );
+  }, [
+    dispatch,
+    searchText,
+    statusFilter,
+    categoryFilter,
+  ]);
+
+  /* =======================================================
+     LOAD STATS
+  ======================================================= */
+
+  useEffect(() => {
+    dispatch(fetchResearchStats());
+  }, [dispatch]);
+
+  /* =======================================================
+     LOCAL FILTER
+     Keeps UI responsive even when API returns all data.
   ======================================================= */
 
   const filteredResearch = useMemo(() => {
     return research.filter((item) => {
       const search =
-        searchText.toLowerCase().trim();
+        searchText
+          .toLowerCase()
+          .trim();
+
+      const title =
+        item.title || "";
+
+      const authors =
+        item.authors || "";
+
+      const category =
+        item.category || "";
+
+      const abstract =
+        item.abstract || "";
 
       const matchesSearch =
-        item.title
+        !search ||
+        title
           .toLowerCase()
           .includes(search) ||
-        item.authors
+        authors
           .toLowerCase()
           .includes(search) ||
-        item.category
+        category
           .toLowerCase()
           .includes(search) ||
-        item.abstract
+        abstract
           .toLowerCase()
           .includes(search);
 
@@ -261,31 +286,6 @@ const Research = () => {
     statusFilter,
     categoryFilter,
   ]);
-
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
-
-  const totalResearch =
-    research.length;
-
-  const publishedResearch =
-    research.filter(
-      (item) =>
-        item.status === "Published"
-    ).length;
-
-  const draftResearch =
-    research.filter(
-      (item) =>
-        item.status === "Draft"
-    ).length;
-
-  const aiResearch =
-    research.filter(
-      (item) =>
-        item.category === "AI"
-    ).length;
 
   /* =======================================================
      CREATE
@@ -320,7 +320,6 @@ const Research = () => {
       publicationDate:
         record.publicationDate,
       status: record.status,
-
       image: [],
       pdf: [],
     });
@@ -355,52 +354,53 @@ const Research = () => {
         forcedStatus || values.status;
 
       const imageFile =
-        values.image?.[0]?.originFileObj ||
-        null;
+        values.image?.[0]
+          ?.originFileObj || null;
 
       const pdfFile =
-        values.pdf?.[0]?.originFileObj ||
-        null;
+        values.pdf?.[0]
+          ?.originFileObj || null;
 
-      /* =========================================
+      /* ================================================
          UPDATE
-      ========================================= */
+      ================================================ */
 
       if (editingResearch) {
-        setResearch((previous) =>
-          previous.map((item) =>
-            item.id === editingResearch.id
-              ? {
-                  ...item,
+        const result =
+          await dispatch(
+            editResearch({
+              id: editingResearch.id,
+              researchData: {
+                title: values.title,
+                authors: values.authors,
+                category:
+                  values.category,
+                abstract:
+                  values.abstract,
+                publicationDate:
+                  values.publicationDate,
+                status: finalStatus,
+                image: imageFile,
+              },
+            })
+          ).unwrap();
 
-                  title:
-                    values.title,
+        /* ----------------------------------------------
+           Upload PDF separately
+        ---------------------------------------------- */
 
-                  authors:
-                    values.authors,
+        if (pdfFile) {
+          await dispatch(
+            addResearchPdf({
+              researchId:
+                editingResearch.id,
+              pdfFile,
+            })
+          ).unwrap();
+        }
 
-                  category:
-                    values.category,
-
-                  abstract:
-                    values.abstract,
-
-                  publicationDate:
-                    values.publicationDate,
-
-                  status:
-                    finalStatus,
-
-                  image:
-                    imageFile ||
-                    item.image,
-
-                  pdf:
-                    pdfFile ||
-                    item.pdf,
-                }
-              : item
-          )
+        await dispatch(
+          fetchResearchStats()
         );
 
         message.success(
@@ -408,59 +408,76 @@ const Research = () => {
             ? "Research published successfully."
             : "Research draft saved successfully."
         );
+
+        closeModal();
+
+        return;
       }
 
-      /* =========================================
+      /* ================================================
          CREATE
-      ========================================= */
+      ================================================ */
 
-      else {
-        const newResearch = {
-          id: Date.now(),
+      const result =
+        await dispatch(
+          addResearch({
+            title: values.title,
+            authors: values.authors,
+            category: values.category,
+            abstract: values.abstract,
+            publicationDate:
+              values.publicationDate,
+            status: finalStatus,
+            image: imageFile,
+          })
+        ).unwrap();
 
-          title:
-            values.title,
+      /* ----------------------------------------------
+         Get newly-created research ID
+      ---------------------------------------------- */
 
-          authors:
-            values.authors,
+      const createdResearch =
+        result?.data;
 
-          category:
-            values.category,
+      const researchId =
+        createdResearch?.id;
 
-          abstract:
-            values.abstract,
+      /* ----------------------------------------------
+         Upload PDF separately
+      ---------------------------------------------- */
 
-          publicationDate:
-            values.publicationDate ||
-            new Date()
-              .toISOString()
-              .split("T")[0],
-
-          status:
-            finalStatus,
-
-          image:
-            imageFile,
-
-          pdf:
+      if (pdfFile && researchId) {
+        await dispatch(
+          addResearchPdf({
+            researchId,
             pdfFile,
-        };
-
-        setResearch((previous) => [
-          newResearch,
-          ...previous,
-        ]);
-
-        message.success(
-          finalStatus === "Published"
-            ? "Research published successfully."
-            : "Research draft saved successfully."
-        );
+          })
+        ).unwrap();
       }
+
+      await dispatch(
+        fetchResearchStats()
+      );
+
+      message.success(
+        finalStatus === "Published"
+          ? "Research published successfully."
+          : "Research draft saved successfully."
+      );
 
       closeModal();
     } catch (error) {
-      // Ant Design validation handles errors.
+      if (
+        error?.errorFields
+      ) {
+        return;
+      }
+
+      message.error(
+        typeof error === "string"
+          ? error
+          : "Unable to save research."
+      );
     }
   };
 
@@ -468,44 +485,59 @@ const Research = () => {
      DELETE
   ======================================================= */
 
-  const handleDelete = (id) => {
-    setResearch((previous) =>
-      previous.filter(
-        (item) => item.id !== id
-      )
-    );
+  const handleDelete = async (id) => {
+    try {
+      await dispatch(
+        removeResearch(id)
+      ).unwrap();
 
-    message.success(
-      "Research deleted successfully."
-    );
+      await dispatch(
+        fetchResearchStats()
+      );
+
+      message.success(
+        "Research deleted successfully."
+      );
+    } catch (error) {
+      message.error(
+        typeof error === "string"
+          ? error
+          : "Failed to delete research."
+      );
+    }
   };
 
   /* =======================================================
      PUBLISH / DRAFT
   ======================================================= */
 
-  const toggleStatus = (record) => {
-    const newStatus =
-      record.status === "Published"
-        ? "Draft"
-        : "Published";
+  const toggleStatus = async (
+    record
+  ) => {
+    try {
+      await dispatch(
+        changeResearchStatus(
+          record.id
+        )
+      ).unwrap();
 
-    setResearch((previous) =>
-      previous.map((item) =>
-        item.id === record.id
-          ? {
-              ...item,
-              status: newStatus,
-            }
-          : item
-      )
-    );
+      await dispatch(
+        fetchResearchStats()
+      );
 
-    message.success(
-      newStatus === "Published"
-        ? "Research published successfully."
-        : "Research moved to draft."
-    );
+      message.success(
+        record.status ===
+          "Published"
+          ? "Research moved to draft."
+          : "Research published successfully."
+      );
+    } catch (error) {
+      message.error(
+        typeof error === "string"
+          ? error
+          : "Failed to change research status."
+      );
+    }
   };
 
   /* =======================================================
@@ -515,7 +547,8 @@ const Research = () => {
   const imageUploadProps = {
     beforeUpload: () => false,
     maxCount: 1,
-    accept: "image/*",
+    accept:
+      "image/jpeg,image/png,image/webp,image/gif",
     listType: "picture-card",
   };
 
@@ -526,7 +559,26 @@ const Research = () => {
   const pdfUploadProps = {
     beforeUpload: () => false,
     maxCount: 1,
-    accept: ".pdf,application/pdf",
+    accept:
+      ".pdf,application/pdf",
+  };
+
+  /* =======================================================
+     REFRESH
+  ======================================================= */
+
+  const handleRefresh = () => {
+    dispatch(
+      fetchResearch({
+        search: searchText,
+        status: statusFilter,
+        category: categoryFilter,
+      })
+    );
+
+    dispatch(
+      fetchResearchStats()
+    );
   };
 
   /* =======================================================
@@ -659,6 +711,9 @@ const Research = () => {
               onClick={() =>
                 toggleStatus(record)
               }
+              loading={
+                submitting
+              }
             />
           </Tooltip>
 
@@ -688,6 +743,9 @@ const Research = () => {
                 icon={
                   <DeleteOutlined />
                 }
+                loading={
+                  deleting
+                }
               />
             </Tooltip>
           </Popconfirm>
@@ -710,16 +768,11 @@ const Research = () => {
       <div
         style={{
           marginBottom: 24,
-
           display: "flex",
-
           justifyContent:
             "space-between",
-
           alignItems: "center",
-
           gap: 16,
-
           flexWrap: "wrap",
         }}
       >
@@ -785,7 +838,11 @@ const Research = () => {
                     fontWeight: 600,
                   }}
                 >
-                  {totalResearch}
+                  {statsLoading ? (
+                    <Spin size="small" />
+                  ) : (
+                    stats.total
+                  )}
                 </div>
               </div>
             </Space>
@@ -816,7 +873,11 @@ const Research = () => {
                     fontWeight: 600,
                   }}
                 >
-                  {publishedResearch}
+                  {statsLoading ? (
+                    <Spin size="small" />
+                  ) : (
+                    stats.published
+                  )}
                 </div>
               </div>
             </Space>
@@ -847,7 +908,11 @@ const Research = () => {
                     fontWeight: 600,
                   }}
                 >
-                  {draftResearch}
+                  {statsLoading ? (
+                    <Spin size="small" />
+                  ) : (
+                    stats.drafts
+                  )}
                 </div>
               </div>
             </Space>
@@ -878,7 +943,11 @@ const Research = () => {
                     fontWeight: 600,
                   }}
                 >
-                  {aiResearch}
+                  {statsLoading ? (
+                    <Spin size="small" />
+                  ) : (
+                    stats.ai
+                  )}
                 </div>
               </div>
             </Space>
@@ -942,7 +1011,9 @@ const Research = () => {
               style={{
                 width: "100%",
               }}
-              value={categoryFilter}
+              value={
+                categoryFilter
+              }
               onChange={
                 setCategoryFilter
               }
@@ -965,8 +1036,10 @@ const Research = () => {
                   value: "GIS",
                 },
                 {
-                  label: "Hydrology",
-                  value: "Hydrology",
+                  label:
+                    "Hydrology",
+                  value:
+                    "Hydrology",
                 },
               ]}
             />
@@ -983,7 +1056,9 @@ const Research = () => {
               style={{
                 width: "100%",
               }}
-              value={statusFilter}
+              value={
+                statusFilter
+              }
               onChange={
                 setStatusFilter
               }
@@ -1008,22 +1083,32 @@ const Research = () => {
           </Col>
 
           <Col xs={24}>
-            <Button
-              icon={
-                <ReloadOutlined />
-              }
-              onClick={() => {
-                setSearchText("");
-                setStatusFilter(
-                  "all"
-                );
-                setCategoryFilter(
-                  "all"
-                );
-              }}
-            >
-              Reset Filters
-            </Button>
+            <Space>
+              <Button
+                icon={
+                  <ReloadOutlined />
+                }
+                onClick={() => {
+                  setSearchText("");
+                  setStatusFilter(
+                    "all"
+                  );
+                  setCategoryFilter(
+                    "all"
+                  );
+                }}
+              >
+                Reset Filters
+              </Button>
+
+              <Button
+                onClick={
+                  handleRefresh
+                }
+              >
+                Refresh
+              </Button>
+            </Space>
           </Col>
         </Row>
 
@@ -1035,6 +1120,7 @@ const Research = () => {
           dataSource={
             filteredResearch
           }
+          loading={loading}
           pagination={{
             pageSize: 8,
             showSizeChanger: true,
@@ -1063,15 +1149,12 @@ const Research = () => {
         width={800}
         destroyOnHidden
       >
-
         <Form
           form={form}
           layout="vertical"
         >
 
-          {/* ============================================
-              RESEARCH TITLE
-          ============================================ */}
+          {/* TITLE */}
 
           <Form.Item
             label="Research Title"
@@ -1092,9 +1175,7 @@ const Research = () => {
             />
           </Form.Item>
 
-          {/* ============================================
-              AUTHORS
-          ============================================ */}
+          {/* AUTHORS */}
 
           <Form.Item
             label="Authors"
@@ -1113,9 +1194,7 @@ const Research = () => {
             />
           </Form.Item>
 
-          {/* ============================================
-              CATEGORY
-          ============================================ */}
+          {/* CATEGORY */}
 
           <Form.Item
             label="Category"
@@ -1154,9 +1233,7 @@ const Research = () => {
             />
           </Form.Item>
 
-          {/* ============================================
-              ABSTRACT
-          ============================================ */}
+          {/* ABSTRACT */}
 
           <Form.Item
             label="Abstract"
@@ -1177,15 +1254,15 @@ const Research = () => {
             />
           </Form.Item>
 
-          {/* ============================================
-              RESEARCH IMAGE
-          ============================================ */}
+          {/* IMAGE */}
 
           <Form.Item
             label="Research Image"
             name="image"
             valuePropName="fileList"
-            getValueFromEvent={(event) =>
+            getValueFromEvent={(
+              event
+            ) =>
               event?.fileList
             }
           >
@@ -1218,18 +1295,19 @@ const Research = () => {
               marginBottom: 20,
             }}
           >
-            Recommended: JPG, JPEG, PNG or WebP.
+            Recommended: JPG, JPEG, PNG or
+            WebP. Maximum 5 MB.
           </Text>
 
-          {/* ============================================
-              RESEARCH PDF
-          ============================================ */}
+          {/* PDF */}
 
           <Form.Item
             label="Research PDF"
             name="pdf"
             valuePropName="fileList"
-            getValueFromEvent={(event) =>
+            getValueFromEvent={(
+              event
+            ) =>
               event?.fileList
             }
           >
@@ -1255,11 +1333,10 @@ const Research = () => {
             }}
           >
             Only PDF documents are accepted.
+            Maximum 20 MB.
           </Text>
 
-          {/* ============================================
-              PUBLICATION DATE
-          ============================================ */}
+          {/* DATE */}
 
           <Form.Item
             label="Publication Date"
@@ -1278,9 +1355,7 @@ const Research = () => {
             />
           </Form.Item>
 
-          {/* ============================================
-              STATUS
-          ============================================ */}
+          {/* STATUS */}
 
           <Form.Item
             label="Publication Status"
@@ -1306,9 +1381,7 @@ const Research = () => {
 
           <Divider />
 
-          {/* ============================================
-              ACTIONS
-          ============================================ */}
+          {/* ACTIONS */}
 
           <div
             style={{
@@ -1320,7 +1393,13 @@ const Research = () => {
             }}
           >
             <Button
-              onClick={closeModal}
+              onClick={
+                closeModal
+              }
+              disabled={
+                submitting ||
+                pdfUploading
+              }
             >
               Cancel
             </Button>
@@ -1331,6 +1410,10 @@ const Research = () => {
               }
               onClick={() =>
                 handleSave("Draft")
+              }
+              loading={
+                submitting ||
+                pdfUploading
               }
             >
               Save
@@ -1345,6 +1428,10 @@ const Research = () => {
                 handleSave(
                   "Published"
                 )
+              }
+              loading={
+                submitting ||
+                pdfUploading
               }
             >
               Publish
@@ -1419,7 +1506,7 @@ const Research = () => {
 
             {/* IMAGE */}
 
-            {previewResearch.image && (
+            {previewResearch.image_url && (
               <div
                 style={{
                   marginBottom: 24,
@@ -1427,8 +1514,8 @@ const Research = () => {
                 }}
               >
                 <img
-                  src={URL.createObjectURL(
-                    previewResearch.image
+                  src={getFileUrl(
+                    previewResearch.image_url
                   )}
                   alt={
                     previewResearch.title
@@ -1464,23 +1551,17 @@ const Research = () => {
 
             {/* PDF */}
 
-            {previewResearch.pdf && (
+            {previewResearch.pdf_url && (
               <Button
                 type="primary"
                 icon={
                   <FilePdfOutlined />
                 }
-                onClick={() => {
-                  const url =
-                    URL.createObjectURL(
-                      previewResearch.pdf
-                    );
-
-                  window.open(
-                    url,
-                    "_blank"
-                  );
-                }}
+                href={getFileUrl(
+                  previewResearch.pdf_url
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 Open Research PDF
               </Button>
