@@ -42,7 +42,7 @@ const researchPdfDirectory = path.join(
 );
 
 // =========================================================
-// CREATE ALL DIRECTORIES
+// CREATE UPLOAD DIRECTORIES
 // =========================================================
 
 [
@@ -113,6 +113,11 @@ const blogImageFilter = (req, file, cb) => {
 // =========================================================
 // BLOG FEATURED IMAGE UPLOAD
 // =========================================================
+// IMPORTANT:
+// Keep this as a Multer instance because your existing
+// blog.routes.js uses:
+// uploadBlogImage.single("image")
+// =========================================================
 
 const uploadBlogImage = multer({
   storage: blogStorage,
@@ -127,6 +132,10 @@ const uploadBlogImage = multer({
 
 // =========================================================
 // BLOG CONTENT IMAGE UPLOAD
+// =========================================================
+// IMPORTANT:
+// Keep this as a Multer instance because your existing
+// blog routes use .single("contentImage").
 // =========================================================
 
 const uploadBlogContentImage = multer({
@@ -224,6 +233,14 @@ const researchPdfFilter = (req, file, cb) => {
 // =========================================================
 // RESEARCH IMAGE UPLOAD
 // =========================================================
+// This is a READY-TO-USE middleware function.
+//
+// Research route:
+// uploadResearchImage
+//
+// Field name:
+// image
+// =========================================================
 
 const uploadResearchImage = multer({
   storage: researchImageStorage,
@@ -231,16 +248,21 @@ const uploadResearchImage = multer({
   fileFilter: researchImageFilter,
 
   limits: {
-    // 5 MB
     fileSize: 5 * 1024 * 1024,
-
-    // One research image
     files: 1,
   },
-});
+}).single("image");
 
 // =========================================================
 // RESEARCH PDF UPLOAD
+// =========================================================
+// This is a READY-TO-USE middleware function.
+//
+// Research route:
+// uploadResearchPdf
+//
+// Field name:
+// pdf
 // =========================================================
 
 const uploadResearchPdf = multer({
@@ -249,13 +271,10 @@ const uploadResearchPdf = multer({
   fileFilter: researchPdfFilter,
 
   limits: {
-    // 20 MB
     fileSize: 20 * 1024 * 1024,
-
-    // One research PDF
     files: 1,
   },
-});
+}).single("pdf");
 
 // =========================================================
 // EXPORT
@@ -263,14 +282,14 @@ const uploadResearchPdf = multer({
 
 module.exports = {
   // -------------------------------------------------------
-  // Existing Blog Middleware
+  // Blog
   // -------------------------------------------------------
 
   uploadBlogImage,
   uploadBlogContentImage,
 
   // -------------------------------------------------------
-  // Research Middleware
+  // Research
   // -------------------------------------------------------
 
   uploadResearchImage,
