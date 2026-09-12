@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const path = require("path");
 
 require("dotenv").config();
 
@@ -28,6 +29,12 @@ const alertRoutes = require("./routes/alertRoutes");
 // ---------------------------------------------------------
 
 const blogRoutes = require("./routes/blog.routes");
+
+// ---------------------------------------------------------
+// RESEARCH ROUTES
+// ---------------------------------------------------------
+
+const researchRoutes = require("./routes/research.routes");
 
 const app = express();
 
@@ -145,6 +152,25 @@ app.use(
 app.use(cookieParser());
 
 // =========================================================
+// STATIC UPLOADS
+// =========================================================
+//
+// Makes uploaded files available through:
+//
+// /uploads/blogs/...
+// /uploads/research/images/...
+// /uploads/research/pdfs/...
+//
+// =========================================================
+
+app.use(
+  "/uploads",
+  express.static(
+    path.join(__dirname, "..", "uploads")
+  )
+);
+
+// =========================================================
 // HEALTH CHECK
 // =========================================================
 
@@ -179,6 +205,7 @@ app.get("/db-test", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "PostgreSQL connection failed",
+
       error:
         process.env.NODE_ENV === "production"
           ? undefined
@@ -304,6 +331,26 @@ app.use(
 app.use(
   "/api/blogs",
   blogRoutes
+);
+
+// =========================================================
+// RESEARCH MANAGEMENT ROUTES
+// =========================================================
+//
+// GET    /api/research
+// GET    /api/research/stats
+// GET    /api/research/:id
+// POST   /api/research
+// PUT    /api/research/:id
+// POST   /api/research/:id/pdf
+// PATCH  /api/research/:id/toggle-status
+// DELETE /api/research/:id
+//
+// =========================================================
+
+app.use(
+  "/api/research",
+  researchRoutes
 );
 
 // =========================================================
