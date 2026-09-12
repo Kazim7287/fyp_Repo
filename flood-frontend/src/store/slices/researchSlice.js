@@ -333,19 +333,19 @@ const researchSlice = createSlice({
           const data =
             action.payload?.data || {};
 
-          state.stats = {
-            total:
-              Number(data.total ?? 0),
+         state.stats = {
+  total:
+    Number(data.total_research ?? 0),
 
-            published:
-              Number(data.published ?? 0),
+  published:
+    Number(data.published_research ?? 0),
 
-            drafts:
-              Number(data.drafts ?? 0),
+  drafts:
+    Number(data.draft_research ?? 0),
 
-            ai:
-              Number(data.ai ?? 0),
-          };
+  ai:
+    Number(data.ai_research ?? 0),
+};
         }
       )
 
