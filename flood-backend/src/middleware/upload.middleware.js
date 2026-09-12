@@ -1,46 +1,72 @@
-
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
 // =========================================================
-// UPLOAD DIRECTORY
+// BASE UPLOAD DIRECTORY
 // =========================================================
 
-const uploadDirectory = path.join(
+const uploadsDirectory = path.join(
   __dirname,
   "..",
   "..",
-  "uploads",
+  "uploads"
+);
+
+// =========================================================
+// BLOG UPLOAD DIRECTORY
+// =========================================================
+
+const blogUploadDirectory = path.join(
+  uploadsDirectory,
   "blogs"
 );
 
 // =========================================================
-// CREATE DIRECTORY IF IT DOES NOT EXIST
+// RESEARCH UPLOAD DIRECTORIES
 // =========================================================
 
-if (!fs.existsSync(uploadDirectory)) {
-  fs.mkdirSync(uploadDirectory, {
-    recursive: true,
-  });
-}
+const researchUploadDirectory = path.join(
+  uploadsDirectory,
+  "research"
+);
+
+const researchImageDirectory = path.join(
+  researchUploadDirectory,
+  "images"
+);
+
+const researchPdfDirectory = path.join(
+  researchUploadDirectory,
+  "pdfs"
+);
 
 // =========================================================
-// STORAGE CONFIGURATION
+// CREATE ALL DIRECTORIES
 // =========================================================
 
-const storage = multer.diskStorage({
-  // -------------------------------------------------------
-  // Destination
-  // -------------------------------------------------------
+[
+  uploadsDirectory,
+  blogUploadDirectory,
+  researchUploadDirectory,
+  researchImageDirectory,
+  researchPdfDirectory,
+].forEach((directory) => {
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, {
+      recursive: true,
+    });
+  }
+});
 
+// =========================================================
+// BLOG STORAGE
+// =========================================================
+
+const blogStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDirectory);
+    cb(null, blogUploadDirectory);
   },
-
-  // -------------------------------------------------------
-  // Filename
-  // -------------------------------------------------------
 
   filename: (req, file, cb) => {
     const extension = path
@@ -61,10 +87,10 @@ const storage = multer.diskStorage({
 });
 
 // =========================================================
-// FILE FILTER
+// BLOG IMAGE FILTER
 // =========================================================
 
-const fileFilter = (req, file, cb) => {
+const blogImageFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     "image/jpeg",
     "image/png",
@@ -85,35 +111,148 @@ const fileFilter = (req, file, cb) => {
 };
 
 // =========================================================
-// FEATURED IMAGE UPLOAD
+// BLOG FEATURED IMAGE UPLOAD
 // =========================================================
 
 const uploadBlogImage = multer({
-  storage,
-  fileFilter,
+  storage: blogStorage,
+
+  fileFilter: blogImageFilter,
 
   limits: {
-    // 5 MB
     fileSize: 5 * 1024 * 1024,
-
-    // Featured image = one file
     files: 1,
   },
 });
 
 // =========================================================
-// CONTENT IMAGE UPLOAD
+// BLOG CONTENT IMAGE UPLOAD
 // =========================================================
 
 const uploadBlogContentImage = multer({
-  storage,
-  fileFilter,
+  storage: blogStorage,
+
+  fileFilter: blogImageFilter,
 
   limits: {
-    // 5 MB per image
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
+  },
+});
+
+// =========================================================
+// RESEARCH IMAGE STORAGE
+// =========================================================
+
+const researchImageStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, researchImageDirectory);
+  },
+
+  filename: (req, file, cb) => {
+    const extension = path
+      .extname(file.originalname)
+      .toLowerCase();
+
+    const uniqueName = `research-${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}${extension}`;
+
+    cb(null, uniqueName);
+  },
+});
+
+// =========================================================
+// RESEARCH PDF STORAGE
+// =========================================================
+
+const researchPdfStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, researchPdfDirectory);
+  },
+
+  filename: (req, file, cb) => {
+    const uniqueName = `research-${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}.pdf`;
+
+    cb(null, uniqueName);
+  },
+});
+
+// =========================================================
+// RESEARCH IMAGE FILTER
+// =========================================================
+
+const researchImageFilter = (req, file, cb) => {
+  const allowedMimeTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+  ];
+
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    return cb(null, true);
+  }
+
+  return cb(
+    new Error(
+      "Only JPEG, PNG, WEBP, and GIF images are allowed."
+    ),
+    false
+  );
+};
+
+// =========================================================
+// RESEARCH PDF FILTER
+// =========================================================
+
+const researchPdfFilter = (req, file, cb) => {
+  if (file.mimetype === "application/pdf") {
+    return cb(null, true);
+  }
+
+  return cb(
+    new Error(
+      "Only PDF documents are allowed."
+    ),
+    false
+  );
+};
+
+// =========================================================
+// RESEARCH IMAGE UPLOAD
+// =========================================================
+
+const uploadResearchImage = multer({
+  storage: researchImageStorage,
+
+  fileFilter: researchImageFilter,
+
+  limits: {
+    // 5 MB
     fileSize: 5 * 1024 * 1024,
 
-    // One image per editor upload request
+    // One research image
+    files: 1,
+  },
+});
+
+// =========================================================
+// RESEARCH PDF UPLOAD
+// =========================================================
+
+const uploadResearchPdf = multer({
+  storage: researchPdfStorage,
+
+  fileFilter: researchPdfFilter,
+
+  limits: {
+    // 20 MB
+    fileSize: 20 * 1024 * 1024,
+
+    // One research PDF
     files: 1,
   },
 });
@@ -123,7 +262,28 @@ const uploadBlogContentImage = multer({
 // =========================================================
 
 module.exports = {
+  // -------------------------------------------------------
+  // Existing Blog Middleware
+  // -------------------------------------------------------
+
   uploadBlogImage,
   uploadBlogContentImage,
-  uploadDirectory,
+
+  // -------------------------------------------------------
+  // Research Middleware
+  // -------------------------------------------------------
+
+  uploadResearchImage,
+  uploadResearchPdf,
+
+  // -------------------------------------------------------
+  // Directories
+  // -------------------------------------------------------
+
+  uploadsDirectory,
+  blogUploadDirectory,
+
+  researchUploadDirectory,
+  researchImageDirectory,
+  researchPdfDirectory,
 };
