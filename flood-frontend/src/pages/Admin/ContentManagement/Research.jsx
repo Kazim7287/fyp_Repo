@@ -59,7 +59,7 @@ import {
   selectResearchSubmitting,
   selectResearchPdfUploading,
   selectResearchDeleting,
-} from "../store/slices/researchSlice";
+} from "../../../store/slices/researchSlice";
 
 const { Title, Text, Paragraph } =
   Typography;
