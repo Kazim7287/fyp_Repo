@@ -11,6 +11,7 @@ import {
   updateBlogApi,
   deleteBlogApi,
   toggleBlogPublishApi,
+  uploadBlogContentImageApi,
   extractBlogs,
   extractPagination,
 } from "../../api/blogApi";
@@ -22,9 +23,27 @@ import {
 */
 
 const initialState = {
+  /*
+  |--------------------------------------------------------------------------
+  | Blogs
+  |--------------------------------------------------------------------------
+  */
+
   blogs: [],
 
+  /*
+  |--------------------------------------------------------------------------
+  | Selected Blog
+  |--------------------------------------------------------------------------
+  */
+
   selectedBlog: null,
+
+  /*
+  |--------------------------------------------------------------------------
+  | Statistics
+  |--------------------------------------------------------------------------
+  */
 
   stats: {
     total: 0,
@@ -34,12 +53,24 @@ const initialState = {
     totalViews: 0,
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Pagination
+  |--------------------------------------------------------------------------
+  */
+
   pagination: {
     page: 1,
     limit: 8,
     total: 0,
     totalPages: 0,
   },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading States
+  |--------------------------------------------------------------------------
+  */
 
   loading: false,
 
@@ -52,6 +83,24 @@ const initialState = {
   toggling: false,
 
   statsLoading: false,
+
+  /*
+  |--------------------------------------------------------------------------
+  | Content Image Upload
+  |--------------------------------------------------------------------------
+  |
+  | Used by ReactQuill.
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  contentImageUploading: false,
+
+  /*
+  |--------------------------------------------------------------------------
+  | Error
+  |--------------------------------------------------------------------------
+  */
 
   error: null,
 };
@@ -70,21 +119,49 @@ const getErrorMessage = (
     return fallback;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | String error
+  |--------------------------------------------------------------------------
+  */
+
   if (typeof error === "string") {
     return error;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Error.message
+  |--------------------------------------------------------------------------
+  */
 
   if (error?.message) {
     return error.message;
   }
 
-  if (error?.response?.data?.message) {
+  /*
+  |--------------------------------------------------------------------------
+  | Axios response
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    error?.response?.data?.message
+  ) {
     return error.response.data.message;
   }
 
-  if (error?.response?.data?.error) {
+  if (
+    error?.response?.data?.error
+  ) {
     return error.response.data.error;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Redux error
+  |--------------------------------------------------------------------------
+  */
 
   if (error?.error) {
     return error.error;
@@ -100,41 +177,36 @@ const getErrorMessage = (
 |
 | GET /api/blogs
 |
-| filters:
-| {
-|   search,
-|   status,
-|   category,
-|   page,
-|   limit
-| }
-|
 |--------------------------------------------------------------------------
 */
 
-export const fetchBlogs = createAsyncThunk(
-  "blogs/fetchBlogs",
+export const fetchBlogs =
+  createAsyncThunk(
+    "blogs/fetchBlogs",
 
-  async (
-    filters = {},
-    { rejectWithValue }
-  ) => {
-    try {
-      const response = await getBlogsApi(
-        filters
-      );
+    async (
+      filters = {},
+      {
+        rejectWithValue,
+      }
+    ) => {
+      try {
+        const response =
+          await getBlogsApi(
+            filters
+          );
 
-      return response;
-    } catch (error) {
-      return rejectWithValue(
-        getErrorMessage(
-          error,
-          "Failed to load blogs."
-        )
-      );
+        return response;
+      } catch (error) {
+        return rejectWithValue(
+          getErrorMessage(
+            error,
+            "Failed to load blogs."
+          )
+        );
+      }
     }
-  }
-);
+  );
 
 /*
 |--------------------------------------------------------------------------
@@ -152,7 +224,9 @@ export const fetchBlogById =
 
     async (
       id,
-      { rejectWithValue }
+      {
+        rejectWithValue,
+      }
     ) => {
       try {
         if (!id) {
@@ -192,7 +266,9 @@ export const fetchBlogStats =
 
     async (
       _,
-      { rejectWithValue }
+      {
+        rejectWithValue,
+      }
     ) => {
       try {
         const response =
@@ -226,7 +302,9 @@ export const createBlog =
 
     async (
       blogData,
-      { rejectWithValue }
+      {
+        rejectWithValue,
+      }
     ) => {
       try {
         const response =
@@ -240,6 +318,52 @@ export const createBlog =
           getErrorMessage(
             error,
             "Failed to create blog."
+          )
+        );
+      }
+    }
+  );
+
+/*
+|--------------------------------------------------------------------------
+| UPLOAD BLOG CONTENT IMAGE
+|--------------------------------------------------------------------------
+|
+| POST /api/blogs/upload-image
+|
+| Used by ReactQuill.
+|
+|--------------------------------------------------------------------------
+*/
+
+export const uploadBlogContentImage =
+  createAsyncThunk(
+    "blogs/uploadBlogContentImage",
+
+    async (
+      file,
+      {
+        rejectWithValue,
+      }
+    ) => {
+      try {
+        if (!(file instanceof File)) {
+          throw new Error(
+            "A valid image file is required."
+          );
+        }
+
+        const response =
+          await uploadBlogContentImageApi(
+            file
+          );
+
+        return response;
+      } catch (error) {
+        return rejectWithValue(
+          getErrorMessage(
+            error,
+            "Failed to upload blog content image."
           )
         );
       }
@@ -262,7 +386,9 @@ export const updateBlog =
 
     async (
       { id, data },
-      { rejectWithValue }
+      {
+        rejectWithValue,
+      }
     ) => {
       try {
         if (!id) {
@@ -305,7 +431,9 @@ export const deleteBlog =
 
     async (
       id,
-      { rejectWithValue }
+      {
+        rejectWithValue,
+      }
     ) => {
       try {
         if (!id) {
@@ -315,7 +443,9 @@ export const deleteBlog =
         }
 
         const response =
-          await deleteBlogApi(id);
+          await deleteBlogApi(
+            id
+          );
 
         return {
           id,
@@ -348,7 +478,9 @@ export const toggleBlogPublish =
 
     async (
       id,
-      { rejectWithValue }
+      {
+        rejectWithValue,
+      }
     ) => {
       try {
         if (!id) {
@@ -383,713 +515,897 @@ export const toggleBlogPublish =
 |--------------------------------------------------------------------------
 */
 
-const blogSlice = createSlice({
-  name: "blogs",
+const blogSlice =
+  createSlice({
+    name: "blogs",
 
-  initialState,
+    initialState,
 
-  reducers: {
-    /*
-    |--------------------------------------------------------------------------
-    | CLEAR ERROR
-    |--------------------------------------------------------------------------
-    */
+    reducers: {
+      /*
+      |--------------------------------------------------------------------------
+      | CLEAR ERROR
+      |--------------------------------------------------------------------------
+      */
 
-    clearBlogError: (state) => {
-      state.error = null;
+      clearBlogError: (
+        state
+      ) => {
+        state.error = null;
+      },
+
+      /*
+      |--------------------------------------------------------------------------
+      | CLEAR SELECTED BLOG
+      |--------------------------------------------------------------------------
+      */
+
+      clearSelectedBlog: (
+        state
+      ) => {
+        state.selectedBlog =
+          null;
+      },
+
+      /*
+      |--------------------------------------------------------------------------
+      | RESET STATE
+      |--------------------------------------------------------------------------
+      */
+
+      resetBlogState: () => {
+        return initialState;
+      },
+
+      /*
+      |--------------------------------------------------------------------------
+      | RESET PAGINATION
+      |--------------------------------------------------------------------------
+      */
+
+      resetBlogPagination: (
+        state
+      ) => {
+        state.pagination = {
+          page: 1,
+          limit: 8,
+          total: 0,
+          totalPages: 0,
+        };
+      },
     },
 
     /*
     |--------------------------------------------------------------------------
-    | CLEAR SELECTED BLOG
+    | ASYNC ACTIONS
     |--------------------------------------------------------------------------
     */
 
-    clearSelectedBlog: (state) => {
-      state.selectedBlog = null;
-    },
+    extraReducers: (
+      builder
+    ) => {
+      /*
+      |--------------------------------------------------------------------------
+      | FETCH BLOGS
+      |--------------------------------------------------------------------------
+      */
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESET STATE
-    |--------------------------------------------------------------------------
-    */
+      builder
 
-    resetBlogState: () => {
-      return initialState;
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | RESET PAGINATION
-    |--------------------------------------------------------------------------
-    */
-
-    resetBlogPagination: (state) => {
-      state.pagination = {
-        page: 1,
-        limit: 8,
-        total: 0,
-        totalPages: 0,
-      };
-    },
-  },
-
-  /*
-  |--------------------------------------------------------------------------
-  | ASYNC ACTIONS
-  |--------------------------------------------------------------------------
-  */
-
-  extraReducers: (builder) => {
-    /*
-    |--------------------------------------------------------------------------
-    | FETCH BLOGS
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        fetchBlogs.pending,
-        (state) => {
-          state.loading = true;
-          state.error = null;
-        }
-      )
-
-      .addCase(
-        fetchBlogs.fulfilled,
-        (state, action) => {
-          state.loading = false;
-
-          /*
-          |--------------------------------------------------------------------------
-          | Extract blogs using the helper from blogApi.js
-          |--------------------------------------------------------------------------
-          */
-
-          const blogs =
-            extractBlogs(
-              action.payload
-            );
-
-          /*
-          |--------------------------------------------------------------------------
-          | Extract pagination
-          |--------------------------------------------------------------------------
-          */
-
-          const pagination =
-            extractPagination(
-              action.payload
-            );
-
-          /*
-          |--------------------------------------------------------------------------
-          | IMPORTANT
-          |--------------------------------------------------------------------------
-          */
-
-          state.blogs =
-            Array.isArray(blogs)
-              ? blogs
-              : [];
-
-          state.pagination = {
-            page:
-              pagination.page || 1,
-
-            limit:
-              pagination.limit || 8,
-
-            total:
-              pagination.total || 0,
-
-            totalPages:
-              pagination.totalPages || 0,
-          };
-        }
-      )
-
-      .addCase(
-        fetchBlogs.rejected,
-        (state, action) => {
-          state.loading = false;
-
-          state.error =
-            action.payload ||
-            "Failed to load blogs.";
-
-          /*
-          * Do not destroy existing blogs
-          * if a refresh request fails.
-          */
-        }
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | FETCH SINGLE BLOG
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        fetchBlogById.pending,
-        (state) => {
-          state.loading = true;
-          state.error = null;
-        }
-      )
-
-      .addCase(
-        fetchBlogById.fulfilled,
-        (state, action) => {
-          state.loading = false;
-
-          const response =
-            action.payload;
-
-          /*
-          * API may return:
-          *
-          * {
-          *   data: {...}
-          * }
-          *
-          * or
-          *
-          * {
-          *   blog: {...}
-          * }
-          */
-
-          let blog = null;
-
-          if (
-            response?.data &&
-            !Array.isArray(
-              response.data
-            ) &&
-            typeof response.data ===
-              "object"
-          ) {
-            /*
-            * Handle:
-            * data: { blog: {...} }
-            */
-
-            if (
-              response.data.blog &&
-              typeof response.data.blog ===
-                "object"
-            ) {
-              blog =
-                response.data.blog;
-            }
-
-            /*
-            * Handle:
-            * data: {...}
-            */
-
-            else {
-              blog =
-                response.data;
-            }
+        .addCase(
+          fetchBlogs.pending,
+          (state) => {
+            state.loading = true;
+            state.error = null;
           }
+        )
 
-          /*
-          * Handle:
-          * blog: {...}
-          */
+        .addCase(
+          fetchBlogs.fulfilled,
+          (
+            state,
+            action
+          ) => {
+            state.loading =
+              false;
 
-          else if (
-            response?.blog &&
-            typeof response.blog ===
-              "object"
-          ) {
-            blog =
-              response.blog;
-          }
-
-          /*
-          * Handle direct object
-          */
-
-          else if (
-            response &&
-            typeof response ===
-              "object"
-          ) {
-            blog = response;
-          }
-
-          state.selectedBlog =
-            blog;
-        }
-      )
-
-      .addCase(
-        fetchBlogById.rejected,
-        (state, action) => {
-          state.loading = false;
-
-          state.error =
-            action.payload ||
-            "Failed to load blog.";
-        }
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | FETCH BLOG STATS
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        fetchBlogStats.pending,
-        (state) => {
-          state.statsLoading = true;
-
-          /*
-          * Don't clear normal errors here.
-          */
-        }
-      )
-
-      .addCase(
-        fetchBlogStats.fulfilled,
-        (state, action) => {
-          state.statsLoading = false;
-
-          const response =
-            action.payload;
-
-          /*
-          * Support:
-          *
-          * {
-          *   data: {...}
-          * }
-          *
-          * {
-          *   stats: {...}
-          * }
-          *
-          * {
-          *   data: {
-          *     stats: {...}
-          *   }
-          * }
-          */
-
-          let stats = {};
-
-          if (
-            response?.data &&
-            typeof response.data ===
-              "object"
-          ) {
-            if (
-              response.data.stats &&
-              typeof response.data.stats ===
-                "object"
-            ) {
-              stats =
-                response.data.stats;
-            } else {
-              stats =
-                response.data;
-            }
-          } else if (
-            response?.stats &&
-            typeof response.stats ===
-              "object"
-          ) {
-            stats =
-              response.stats;
-          } else if (
-            response &&
-            typeof response ===
-              "object"
-          ) {
-            stats = response;
-          }
-
-          state.stats = {
-            total: Number(
-              stats.total ??
-                stats.total_posts ??
-                0
-            ),
-
-            published: Number(
-              stats.published ??
-                stats.published_posts ??
-                0
-            ),
-
-            drafts: Number(
-              stats.drafts ??
-                stats.draft_posts ??
-                0
-            ),
-
-            featured: Number(
-              stats.featured ??
-                stats.featured_posts ??
-                0
-            ),
-
-            totalViews: Number(
-              stats.totalViews ??
-                stats.total_views ??
-                0
-            ),
-          };
-        }
-      )
-
-      .addCase(
-        fetchBlogStats.rejected,
-        (state, action) => {
-          state.statsLoading = false;
-
-          state.error =
-            action.payload ||
-            "Failed to load blog statistics.";
-        }
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE BLOG
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        createBlog.pending,
-        (state) => {
-          state.creating = true;
-          state.error = null;
-        }
-      )
-
-      .addCase(
-        createBlog.fulfilled,
-        (state) => {
-          state.creating = false;
-        }
-      )
-
-      .addCase(
-        createBlog.rejected,
-        (state, action) => {
-          state.creating = false;
-
-          state.error =
-            action.payload ||
-            "Failed to create blog.";
-        }
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE BLOG
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        updateBlog.pending,
-        (state) => {
-          state.updating = true;
-          state.error = null;
-        }
-      )
-
-      .addCase(
-        updateBlog.fulfilled,
-        (state, action) => {
-          state.updating = false;
-
-          /*
-          * Try to update the blog
-          * immediately in Redux if the
-          * API returns the updated blog.
-          */
-
-          const response =
-            action.payload;
-
-          let updatedBlog = null;
-
-          if (
-            response?.data &&
-            typeof response.data ===
-              "object"
-          ) {
-            updatedBlog =
-              response.data.blog ||
-              response.data;
-          } else if (
-            response?.blog &&
-            typeof response.blog ===
-              "object"
-          ) {
-            updatedBlog =
-              response.blog;
-          }
-
-          if (updatedBlog?.id) {
-            state.blogs =
-              state.blogs.map(
-                (blog) =>
-                  blog.id ===
-                  updatedBlog.id
-                    ? {
-                        ...blog,
-                        ...updatedBlog,
-                      }
-                    : blog
+            const blogs =
+              extractBlogs(
+                action.payload
               );
 
-            if (
-              state.selectedBlog?.id ===
-              updatedBlog.id
-            ) {
-              state.selectedBlog = {
-                ...state.selectedBlog,
-                ...updatedBlog,
+            const pagination =
+              extractPagination(
+                action.payload
+              );
+
+            state.blogs =
+              Array.isArray(
+                blogs
+              )
+                ? blogs
+                : [];
+
+            state.pagination =
+              {
+                page:
+                  pagination.page ||
+                  1,
+
+                limit:
+                  pagination.limit ||
+                  8,
+
+                total:
+                  pagination.total ||
+                  0,
+
+                totalPages:
+                  pagination.totalPages ||
+                  0,
               };
-            }
           }
-        }
-      )
+        )
 
-      .addCase(
-        updateBlog.rejected,
-        (state, action) => {
-          state.updating = false;
+        .addCase(
+          fetchBlogs.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.loading =
+              false;
 
-          state.error =
-            action.payload ||
-            "Failed to update blog.";
-        }
-      );
+            state.error =
+              action.payload ||
+              "Failed to load blogs.";
 
-    /*
-    |--------------------------------------------------------------------------
-    | DELETE BLOG
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        deleteBlog.pending,
-        (state) => {
-          state.deleting = true;
-          state.error = null;
-        }
-      )
-
-      .addCase(
-        deleteBlog.fulfilled,
-        (state, action) => {
-          state.deleting = false;
-
-          const deletedId =
-            action.payload?.id;
-
-          /*
-          * Remove deleted blog from
-          * current Redux list.
-          */
-
-          if (deletedId) {
-            state.blogs =
-              state.blogs.filter(
-                (blog) =>
-                  blog.id !==
-                  deletedId
-              );
+            /*
+            * Existing blogs are intentionally preserved.
+            */
           }
+        );
 
-          /*
-          * Clear selected blog if
-          * it was deleted.
-          */
+      /*
+      |--------------------------------------------------------------------------
+      | FETCH SINGLE BLOG
+      |--------------------------------------------------------------------------
+      */
 
-          if (
-            state.selectedBlog?.id ===
-            deletedId
-          ) {
-            state.selectedBlog =
+      builder
+
+        .addCase(
+          fetchBlogById.pending,
+          (state) => {
+            state.loading =
+              true;
+
+            state.error =
               null;
           }
+        )
 
-          /*
-          * Update total locally.
-          */
+        .addCase(
+          fetchBlogById.fulfilled,
+          (
+            state,
+            action
+          ) => {
+            state.loading =
+              false;
 
-          if (
-            state.pagination.total >
-            0
-          ) {
-            state.pagination.total -=
-              1;
+            const response =
+              action.payload;
+
+            let blog =
+              null;
+
+            /*
+            |--------------------------------------------------------------------------
+            | data: { blog: {...} }
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              response?.data &&
+              !Array.isArray(
+                response.data
+              ) &&
+              typeof response.data ===
+                "object"
+            ) {
+              if (
+                response.data.blog &&
+                typeof response.data.blog ===
+                  "object"
+              ) {
+                blog =
+                  response.data.blog;
+              } else {
+                /*
+                |--------------------------------------------------------------------------
+                | data: {...}
+                |--------------------------------------------------------------------------
+                */
+
+                blog =
+                  response.data;
+              }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | blog: {...}
+            |--------------------------------------------------------------------------
+            */
+
+            else if (
+              response?.blog &&
+              typeof response.blog ===
+                "object"
+            ) {
+              blog =
+                response.blog;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Direct object
+            |--------------------------------------------------------------------------
+            */
+
+            else if (
+              response &&
+              typeof response ===
+                "object"
+            ) {
+              blog =
+                response;
+            }
+
+            state.selectedBlog =
+              blog;
           }
-        }
-      )
+        )
 
-      .addCase(
-        deleteBlog.rejected,
-        (state, action) => {
-          state.deleting = false;
+        .addCase(
+          fetchBlogById.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.loading =
+              false;
 
-          state.error =
-            action.payload ||
-            "Failed to delete blog.";
-        }
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | TOGGLE PUBLISH
-    |--------------------------------------------------------------------------
-    */
-
-    builder
-
-      .addCase(
-        toggleBlogPublish.pending,
-        (state) => {
-          state.toggling = true;
-          state.error = null;
-        }
-      )
-
-      .addCase(
-        toggleBlogPublish.fulfilled,
-        (state, action) => {
-          state.toggling = false;
-
-          const id =
-            action.payload?.id;
-
-          const response =
-            action.payload?.response;
-
-          /*
-          * If backend returns the
-          * updated blog, use it.
-          */
-
-          let updatedBlog = null;
-
-          if (
-            response?.data &&
-            typeof response.data ===
-              "object"
-          ) {
-            updatedBlog =
-              response.data.blog ||
-              response.data;
-          } else if (
-            response?.blog &&
-            typeof response.blog ===
-              "object"
-          ) {
-            updatedBlog =
-              response.blog;
+            state.error =
+              action.payload ||
+              "Failed to load blog.";
           }
+        );
 
-          /*
-          * If backend does not return
-          * the entire blog, toggle the
-          * current status locally.
-          */
+      /*
+      |--------------------------------------------------------------------------
+      | FETCH BLOG STATISTICS
+      |--------------------------------------------------------------------------
+      */
 
-          state.blogs =
-            state.blogs.map(
-              (blog) => {
-                if (
-                  blog.id !== id
-                ) {
-                  return blog;
-                }
+      builder
 
-                if (
-                  updatedBlog
-                ) {
-                  return {
-                    ...blog,
+        .addCase(
+          fetchBlogStats.pending,
+          (state) => {
+            state.statsLoading =
+              true;
+          }
+        )
+
+        .addCase(
+          fetchBlogStats.fulfilled,
+          (
+            state,
+            action
+          ) => {
+            state.statsLoading =
+              false;
+
+            const response =
+              action.payload;
+
+            let stats =
+              {};
+
+            /*
+            |--------------------------------------------------------------------------
+            | data: { stats: {...} }
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              response?.data &&
+              typeof response.data ===
+                "object"
+            ) {
+              if (
+                response.data.stats &&
+                typeof response.data.stats ===
+                  "object"
+              ) {
+                stats =
+                  response.data.stats;
+              } else {
+                /*
+                |--------------------------------------------------------------------------
+                | data: {...}
+                |--------------------------------------------------------------------------
+                */
+
+                stats =
+                  response.data;
+              }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | stats: {...}
+            |--------------------------------------------------------------------------
+            */
+
+            else if (
+              response?.stats &&
+              typeof response.stats ===
+                "object"
+            ) {
+              stats =
+                response.stats;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Direct object
+            |--------------------------------------------------------------------------
+            */
+
+            else if (
+              response &&
+              typeof response ===
+                "object"
+            ) {
+              stats =
+                response;
+            }
+
+            state.stats = {
+              total: Number(
+                stats.total ??
+                  stats.total_posts ??
+                  0
+              ),
+
+              published: Number(
+                stats.published ??
+                  stats.published_posts ??
+                  0
+              ),
+
+              drafts: Number(
+                stats.drafts ??
+                  stats.draft_posts ??
+                  0
+              ),
+
+              featured: Number(
+                stats.featured ??
+                  stats.featured_posts ??
+                  0
+              ),
+
+              totalViews: Number(
+                stats.totalViews ??
+                  stats.total_views ??
+                  0
+              ),
+            };
+          }
+        )
+
+        .addCase(
+          fetchBlogStats.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.statsLoading =
+              false;
+
+            state.error =
+              action.payload ||
+              "Failed to load blog statistics.";
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | CREATE BLOG
+      |--------------------------------------------------------------------------
+      */
+
+      builder
+
+        .addCase(
+          createBlog.pending,
+          (state) => {
+            state.creating =
+              true;
+
+            state.error =
+              null;
+          }
+        )
+
+        .addCase(
+          createBlog.fulfilled,
+          (
+            state
+          ) => {
+            state.creating =
+              false;
+          }
+        )
+
+        .addCase(
+          createBlog.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.creating =
+              false;
+
+            state.error =
+              action.payload ||
+              "Failed to create blog.";
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | UPLOAD BLOG CONTENT IMAGE
+      |--------------------------------------------------------------------------
+      */
+
+      builder
+
+        .addCase(
+          uploadBlogContentImage.pending,
+          (state) => {
+            state.contentImageUploading =
+              true;
+
+            state.error =
+              null;
+          }
+        )
+
+        .addCase(
+          uploadBlogContentImage.fulfilled,
+          (
+            state
+          ) => {
+            state.contentImageUploading =
+              false;
+          }
+        )
+
+        .addCase(
+          uploadBlogContentImage.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.contentImageUploading =
+              false;
+
+            state.error =
+              action.payload ||
+              "Failed to upload blog content image.";
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | UPDATE BLOG
+      |--------------------------------------------------------------------------
+      */
+
+      builder
+
+        .addCase(
+          updateBlog.pending,
+          (state) => {
+            state.updating =
+              true;
+
+            state.error =
+              null;
+          }
+        )
+
+        .addCase(
+          updateBlog.fulfilled,
+          (
+            state,
+            action
+          ) => {
+            state.updating =
+              false;
+
+            const response =
+              action.payload;
+
+            let updatedBlog =
+              null;
+
+            /*
+            |--------------------------------------------------------------------------
+            | data: { blog: {...} }
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              response?.data &&
+              typeof response.data ===
+                "object"
+            ) {
+              updatedBlog =
+                response.data.blog ||
+                response.data;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | blog: {...}
+            |--------------------------------------------------------------------------
+            */
+
+            else if (
+              response?.blog &&
+              typeof response.blog ===
+                "object"
+            ) {
+              updatedBlog =
+                response.blog;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update Redux list
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              updatedBlog?.id
+            ) {
+              state.blogs =
+                state.blogs.map(
+                  (
+                    blog
+                  ) =>
+                    blog.id ===
+                    updatedBlog.id
+                      ? {
+                          ...blog,
+                          ...updatedBlog,
+                        }
+                      : blog
+                );
+
+              /*
+              |--------------------------------------------------------------------------
+              | Update selected blog
+              |--------------------------------------------------------------------------
+              */
+
+              if (
+                state
+                  .selectedBlog
+                  ?.id ===
+                updatedBlog.id
+              ) {
+                state.selectedBlog =
+                  {
+                    ...state.selectedBlog,
                     ...updatedBlog,
                   };
-                }
-
-                return {
-                  ...blog,
-                  status:
-                    blog.status ===
-                    "Published"
-                      ? "Draft"
-                      : "Published",
-                };
               }
-            );
-
-          /*
-          * Also update selected blog.
-          */
-
-          if (
-            state.selectedBlog?.id ===
-            id
-          ) {
-            if (
-              updatedBlog
-            ) {
-              state.selectedBlog = {
-                ...state.selectedBlog,
-                ...updatedBlog,
-              };
-            } else {
-              state.selectedBlog = {
-                ...state.selectedBlog,
-                status:
-                  state.selectedBlog
-                    .status ===
-                  "Published"
-                    ? "Draft"
-                    : "Published",
-              };
             }
           }
-        }
-      )
+        )
 
-      .addCase(
-        toggleBlogPublish.rejected,
-        (state, action) => {
-          state.toggling = false;
+        .addCase(
+          updateBlog.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.updating =
+              false;
 
-          state.error =
-            action.payload ||
-            "Failed to update publication status.";
-        }
-      );
-  },
-});
+            state.error =
+              action.payload ||
+              "Failed to update blog.";
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | DELETE BLOG
+      |--------------------------------------------------------------------------
+      */
+
+      builder
+
+        .addCase(
+          deleteBlog.pending,
+          (state) => {
+            state.deleting =
+              true;
+
+            state.error =
+              null;
+          }
+        )
+
+        .addCase(
+          deleteBlog.fulfilled,
+          (
+            state,
+            action
+          ) => {
+            state.deleting =
+              false;
+
+            const deletedId =
+              action.payload?.id;
+
+            /*
+            |--------------------------------------------------------------------------
+            | Remove from Redux list
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              deletedId
+            ) {
+              state.blogs =
+                state.blogs.filter(
+                  (
+                    blog
+                  ) =>
+                    blog.id !==
+                    deletedId
+                );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Clear selected blog
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              state.selectedBlog
+                ?.id ===
+              deletedId
+            ) {
+              state.selectedBlog =
+                null;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update total
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              state.pagination
+                .total >
+              0
+            ) {
+              state.pagination.total -=
+                1;
+            }
+          }
+        )
+
+        .addCase(
+          deleteBlog.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.deleting =
+              false;
+
+            state.error =
+              action.payload ||
+              "Failed to delete blog.";
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | TOGGLE PUBLISH
+      |--------------------------------------------------------------------------
+      */
+
+      builder
+
+        .addCase(
+          toggleBlogPublish.pending,
+          (state) => {
+            state.toggling =
+              true;
+
+            state.error =
+              null;
+          }
+        )
+
+        .addCase(
+          toggleBlogPublish.fulfilled,
+          (
+            state,
+            action
+          ) => {
+            state.toggling =
+              false;
+
+            const id =
+              action.payload?.id;
+
+            const response =
+              action.payload
+                ?.response;
+
+            let updatedBlog =
+              null;
+
+            /*
+            |--------------------------------------------------------------------------
+            | data: { blog: {...} }
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              response?.data &&
+              typeof response.data ===
+                "object"
+            ) {
+              updatedBlog =
+                response.data.blog ||
+                response.data;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | blog: {...}
+            |--------------------------------------------------------------------------
+            */
+
+            else if (
+              response?.blog &&
+              typeof response.blog ===
+                "object"
+            ) {
+              updatedBlog =
+                response.blog;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update blogs
+            |--------------------------------------------------------------------------
+            */
+
+            state.blogs =
+              state.blogs.map(
+                (
+                  blog
+                ) => {
+                  if (
+                    blog.id !==
+                    id
+                  ) {
+                    return blog;
+                  }
+
+                  /*
+                  |--------------------------------------------------------------------------
+                  | Backend returned complete blog
+                  |--------------------------------------------------------------------------
+                  */
+
+                  if (
+                    updatedBlog
+                  ) {
+                    return {
+                      ...blog,
+                      ...updatedBlog,
+                    };
+                  }
+
+                  /*
+                  |--------------------------------------------------------------------------
+                  | Backend returned no complete blog
+                  |--------------------------------------------------------------------------
+                  */
+
+                  return {
+                    ...blog,
+
+                    status:
+                      blog.status ===
+                      "Published"
+                        ? "Draft"
+                        : "Published",
+                  };
+                }
+              );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update selected blog
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              state.selectedBlog
+                ?.id ===
+              id
+            ) {
+              if (
+                updatedBlog
+              ) {
+                state.selectedBlog =
+                  {
+                    ...state.selectedBlog,
+                    ...updatedBlog,
+                  };
+              } else {
+                state.selectedBlog =
+                  {
+                    ...state.selectedBlog,
+
+                    status:
+                      state
+                        .selectedBlog
+                        .status ===
+                      "Published"
+                        ? "Draft"
+                        : "Published",
+                  };
+              }
+            }
+          }
+        )
+
+        .addCase(
+          toggleBlogPublish.rejected,
+          (
+            state,
+            action
+          ) => {
+            state.toggling =
+              false;
+
+            state.error =
+              action.payload ||
+              "Failed to update publication status.";
+          }
+        );
+    },
+  });
 
 /*
 |--------------------------------------------------------------------------
@@ -1102,7 +1418,8 @@ export const {
   clearSelectedBlog,
   resetBlogState,
   resetBlogPagination,
-} = blogSlice.actions;
+} =
+  blogSlice.actions;
 
 /*
 |--------------------------------------------------------------------------
@@ -1110,11 +1427,13 @@ export const {
 |--------------------------------------------------------------------------
 */
 
-export const selectBlogs = (state) =>
-  state.blogs.blogs;
+export const selectBlogs = (
+  state
+) => state.blogs.blogs;
 
-export const selectBlogStats = (state) =>
-  state.blogs.stats;
+export const selectBlogStats = (
+  state
+) => state.blogs.stats;
 
 export const selectBlogPagination = (
   state
@@ -1144,8 +1463,22 @@ export const selectBlogStatsLoading = (
   state
 ) => state.blogs.statsLoading;
 
-export const selectBlogError = (state) =>
-  state.blogs.error;
+/*
+|--------------------------------------------------------------------------
+| CONTENT IMAGE UPLOADING SELECTOR
+|--------------------------------------------------------------------------
+*/
+
+export const selectBlogContentImageUploading =
+  (
+    state
+  ) =>
+    state.blogs
+      .contentImageUploading;
+
+export const selectBlogError = (
+  state
+) => state.blogs.error;
 
 export const selectSelectedBlog = (
   state

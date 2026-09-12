@@ -4,33 +4,45 @@ import axios from "axios";
 |--------------------------------------------------------------------------
 | Blog API
 |--------------------------------------------------------------------------
+|
 | Frontend requests:
 |
 |   /api/blogs
 |
-| Nginx in production forwards:
+| Production Nginx:
 |
 |   /api/* -> http://127.0.0.1:5000/api/*
 |
-| Therefore DO NOT use:
+| IMPORTANT:
+|
+| Do NOT use:
 |
 |   http://localhost:5000/api
 |
-| in production.
+| here.
+|
 |--------------------------------------------------------------------------
 */
 
 const blogApi = axios.create({
   baseURL: "/api",
+
   withCredentials: true,
 
   /*
-  IMPORTANT:
-  Do NOT set Content-Type to application/json here.
-
-  Blog create/update uses FormData for image upload.
-  Axios/browser will automatically set:
-      multipart/form-data; boundary=...
+  |--------------------------------------------------------------------------
+  | IMPORTANT
+  |--------------------------------------------------------------------------
+  |
+  | Do NOT set Content-Type manually.
+  |
+  | Blog create/update and content-image upload use FormData.
+  |
+  | Axios/browser automatically creates:
+  |
+  | multipart/form-data; boundary=...
+  |
+  |--------------------------------------------------------------------------
   */
 
   headers: {
@@ -60,9 +72,15 @@ blogApi.interceptors.response.use(
         data: error.response.data,
       });
     } else if (error.request) {
-      console.error("Blog API Network Error:", error.message);
+      console.error(
+        "Blog API Network Error:",
+        error.message
+      );
     } else {
-      console.error("Blog API Error:", error.message);
+      console.error(
+        "Blog API Error:",
+        error.message
+      );
     }
 
     return Promise.reject(error);
@@ -76,9 +94,12 @@ blogApi.interceptors.response.use(
 */
 
 /**
- * Convert API response into a consistent error message.
+ * Convert API error into a consistent message.
  */
-const getApiErrorMessage = (error, fallback = "Something went wrong.") => {
+const getApiErrorMessage = (
+  error,
+  fallback = "Something went wrong."
+) => {
   return (
     error?.response?.data?.message ||
     error?.response?.data?.error ||
@@ -87,28 +108,33 @@ const getApiErrorMessage = (error, fallback = "Something went wrong.") => {
   );
 };
 
-/**
- * Convert different possible API response shapes into blog array.
- *
- * Supported:
- *
- * {
- *   success: true,
- *   data: [...]
- * }
- *
- * {
- *   success: true,
- *   blogs: [...]
- * }
- *
- * {
- *   success: true,
- *   data: {
- *      blogs: [...]
- *   }
- * }
- */
+/*
+|--------------------------------------------------------------------------
+| Extract Blogs
+|--------------------------------------------------------------------------
+|
+| Supported API response formats:
+|
+| {
+|   success: true,
+|   data: [...]
+| }
+|
+| {
+|   success: true,
+|   blogs: [...]
+| }
+|
+| {
+|   success: true,
+|   data: {
+|     blogs: [...]
+|   }
+| }
+|
+|--------------------------------------------------------------------------
+*/
+
 export const extractBlogs = (responseData) => {
   if (Array.isArray(responseData?.data)) {
     return responseData.data;
@@ -118,17 +144,26 @@ export const extractBlogs = (responseData) => {
     return responseData.blogs;
   }
 
-  if (Array.isArray(responseData?.data?.blogs)) {
+  if (
+    Array.isArray(
+      responseData?.data?.blogs
+    )
+  ) {
     return responseData.data.blogs;
   }
 
   return [];
 };
 
-/**
- * Extract pagination safely.
- */
-export const extractPagination = (responseData) => {
+/*
+|--------------------------------------------------------------------------
+| Extract Pagination
+|--------------------------------------------------------------------------
+*/
+
+export const extractPagination = (
+  responseData
+) => {
   const pagination =
     responseData?.pagination ||
     responseData?.data?.pagination ||
@@ -136,27 +171,69 @@ export const extractPagination = (responseData) => {
 
   return {
     page: Number(pagination.page) || 1,
-    limit: Number(pagination.limit) || 8,
-    total: Number(pagination.total) || 0,
-    totalPages: Number(pagination.totalPages) || 0,
+
+    limit:
+      Number(pagination.limit) || 8,
+
+    total:
+      Number(pagination.total) || 0,
+
+    totalPages:
+      Number(pagination.totalPages) || 0,
   };
 };
 
-/**
- * Extract one blog from different response shapes.
- */
-export const extractBlog = (responseData) => {
+/*
+|--------------------------------------------------------------------------
+| Extract Single Blog
+|--------------------------------------------------------------------------
+*/
+
+export const extractBlog = (
+  responseData
+) => {
   if (!responseData) {
     return null;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | data: {...}
+  |--------------------------------------------------------------------------
+  */
 
   if (
     responseData?.data &&
     !Array.isArray(responseData.data) &&
     typeof responseData.data === "object"
   ) {
+    /*
+    |--------------------------------------------------------------------------
+    | data: { blog: {...} }
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      responseData.data.blog &&
+      typeof responseData.data.blog === "object"
+    ) {
+      return responseData.data.blog;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | data: {...}
+    |--------------------------------------------------------------------------
+    */
+
     return responseData.data;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | blog: {...}
+  |--------------------------------------------------------------------------
+  */
 
   if (
     responseData?.blog &&
@@ -168,18 +245,46 @@ export const extractBlog = (responseData) => {
   return null;
 };
 
-/**
- * Normalize boolean values.
- */
+/*
+|--------------------------------------------------------------------------
+| Normalize Boolean
+|--------------------------------------------------------------------------
+*/
+
 const normalizeBoolean = (value) => {
-  return value === true || value === "true" || value === 1 || value === "1";
+  return (
+    value === true ||
+    value === "true" ||
+    value === 1 ||
+    value === "1"
+  );
 };
 
-/**
- * Build FormData for create/update.
- */
-const buildBlogFormData = (blogData = {}) => {
+/*
+|--------------------------------------------------------------------------
+| Build Blog FormData
+|--------------------------------------------------------------------------
+|
+| Used by:
+|
+| POST /api/blogs
+| PUT  /api/blogs/:id
+|
+| Featured image remains a SINGLE image.
+|
+|--------------------------------------------------------------------------
+*/
+
+const buildBlogFormData = (
+  blogData = {}
+) => {
   const formData = new FormData();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Title
+  |--------------------------------------------------------------------------
+  */
 
   formData.append(
     "title",
@@ -188,6 +293,12 @@ const buildBlogFormData = (blogData = {}) => {
       : ""
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Category
+  |--------------------------------------------------------------------------
+  */
+
   formData.append(
     "category",
     typeof blogData.category === "string"
@@ -195,15 +306,37 @@ const buildBlogFormData = (blogData = {}) => {
       : ""
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Status
+  |--------------------------------------------------------------------------
+  */
+
   formData.append(
     "status",
     blogData.status || "Draft"
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Featured
+  |--------------------------------------------------------------------------
+  */
+
   formData.append(
     "featured",
-    String(normalizeBoolean(blogData.featured))
+    String(
+      normalizeBoolean(
+        blogData.featured
+      )
+    )
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Excerpt
+  |--------------------------------------------------------------------------
+  */
 
   formData.append(
     "excerpt",
@@ -211,6 +344,25 @@ const buildBlogFormData = (blogData = {}) => {
       ? blogData.excerpt.trim()
       : ""
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Content
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT:
+  |
+  | Multiple article images are stored inside this HTML.
+  |
+  | Example:
+  |
+  | <p>Text</p>
+  | <p><img src="/uploads/blogs/content-123.jpg"></p>
+  | <p>More text</p>
+  | <p><img src="/uploads/blogs/content-456.png"></p>
+  |
+  |--------------------------------------------------------------------------
+  */
 
   formData.append(
     "content",
@@ -221,12 +373,19 @@ const buildBlogFormData = (blogData = {}) => {
 
   /*
   |--------------------------------------------------------------------------
-  | Image
+  | Featured Image
+  |--------------------------------------------------------------------------
+  |
+  | Only one featured image.
+  |
   |--------------------------------------------------------------------------
   */
 
   if (blogData.image instanceof File) {
-    formData.append("image", blogData.image);
+    formData.append(
+      "image",
+      blogData.image
+    );
   }
 
   return formData;
@@ -238,13 +397,6 @@ const buildBlogFormData = (blogData = {}) => {
 |--------------------------------------------------------------------------
 |
 | GET /api/blogs
-|
-| Example:
-|
-| /api/blogs?page=1&limit=8
-| /api/blogs?page=1&limit=8&status=Published
-| /api/blogs?page=1&limit=8&category=Technology
-| /api/blogs?page=1&limit=8&search=flood
 |
 |--------------------------------------------------------------------------
 */
@@ -272,7 +424,8 @@ export const getBlogsApi = async ({
       typeof search === "string" &&
       search.trim()
     ) {
-      params.search = search.trim();
+      params.search =
+        search.trim();
     }
 
     /*
@@ -301,9 +454,13 @@ export const getBlogsApi = async ({
       params.category = category;
     }
 
-    const response = await blogApi.get("/blogs", {
-      params,
-    });
+    const response =
+      await blogApi.get(
+        "/blogs",
+        {
+          params,
+        }
+      );
 
     return response.data;
   } catch (error) {
@@ -326,15 +483,20 @@ export const getBlogsApi = async ({
 |--------------------------------------------------------------------------
 */
 
-export const getBlogApi = async (id) => {
+export const getBlogApi = async (
+  id
+) => {
   if (!id) {
-    throw new Error("Blog ID is required.");
+    throw new Error(
+      "Blog ID is required."
+    );
   }
 
   try {
-    const response = await blogApi.get(
-      `/blogs/${id}`
-    );
+    const response =
+      await blogApi.get(
+        `/blogs/${id}`
+      );
 
     return response.data;
   } catch (error) {
@@ -357,22 +519,24 @@ export const getBlogApi = async (id) => {
 |--------------------------------------------------------------------------
 */
 
-export const getBlogStatsApi = async () => {
-  try {
-    const response = await blogApi.get(
-      "/blogs/stats"
-    );
+export const getBlogStatsApi =
+  async () => {
+    try {
+      const response =
+        await blogApi.get(
+          "/blogs/stats"
+        );
 
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      getApiErrorMessage(
-        error,
-        "Failed to fetch blog statistics."
-      )
-    );
-  }
-};
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(
+          error,
+          "Failed to fetch blog statistics."
+        )
+      );
+    }
+  };
 
 /*
 |--------------------------------------------------------------------------
@@ -381,10 +545,7 @@ export const getBlogStatsApi = async () => {
 |
 | POST /api/blogs
 |
-| Content-Type:
-| multipart/form-data
-|
-| Fields:
+| FormData:
 |
 | title
 | category
@@ -397,14 +558,20 @@ export const getBlogStatsApi = async () => {
 |--------------------------------------------------------------------------
 */
 
-export const createBlogApi = async (blogData = {}) => {
+export const createBlogApi = async (
+  blogData = {}
+) => {
   try {
-    const formData = buildBlogFormData(blogData);
+    const formData =
+      buildBlogFormData(
+        blogData
+      );
 
-    const response = await blogApi.post(
-      "/blogs",
-      formData
-    );
+    const response =
+      await blogApi.post(
+        "/blogs",
+        formData
+      );
 
     return response.data;
   } catch (error) {
@@ -419,46 +586,145 @@ export const createBlogApi = async (blogData = {}) => {
 
 /*
 |--------------------------------------------------------------------------
+| UPLOAD BLOG CONTENT IMAGE
+|--------------------------------------------------------------------------
+|
+| POST /api/blogs/upload-image
+|
+| This endpoint is specifically for images inserted
+| inside the ReactQuill article.
+|
+| Field:
+|
+|   contentImage
+|
+| The server returns an image URL.
+|
+| Example:
+|
+| /uploads/blogs/content-1788972868487-123456.jpg
+|
+|--------------------------------------------------------------------------
+*/
+
+export const uploadBlogContentImageApi =
+  async (file) => {
+    if (!(file instanceof File)) {
+      throw new Error(
+        "A valid image file is required."
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Client-side file validation
+    |--------------------------------------------------------------------------
+    */
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+    ];
+
+    if (
+      !allowedTypes.includes(
+        file.type
+      )
+    ) {
+      throw new Error(
+        "Only JPEG, PNG, WEBP, and GIF images are allowed."
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 5 MB maximum
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      file.size >
+      5 * 1024 * 1024
+    ) {
+      throw new Error(
+        "Image must be 5 MB or smaller."
+      );
+    }
+
+    try {
+      const formData =
+        new FormData();
+
+      formData.append(
+        "contentImage",
+        file
+      );
+
+      const response =
+        await blogApi.post(
+          "/blogs/upload-image",
+          formData
+        );
+
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(
+          error,
+          "Failed to upload blog content image."
+        )
+      );
+    }
+  };
+
+/*
+|--------------------------------------------------------------------------
 | UPDATE BLOG
 |--------------------------------------------------------------------------
 |
 | PUT /api/blogs/:id
 |
-| If image is not provided:
-|     Existing image remains unchanged.
-|
-| If image is provided:
-|     New image is uploaded.
+| If no featured image is provided:
+| existing image remains unchanged.
 |
 |--------------------------------------------------------------------------
 */
 
-export const updateBlogApi = async (
-  id,
-  blogData = {}
-) => {
-  if (!id) {
-    throw new Error("Blog ID is required.");
-  }
+export const updateBlogApi =
+  async (
+    id,
+    blogData = {}
+  ) => {
+    if (!id) {
+      throw new Error(
+        "Blog ID is required."
+      );
+    }
 
-  try {
-    const formData = buildBlogFormData(blogData);
+    try {
+      const formData =
+        buildBlogFormData(
+          blogData
+        );
 
-    const response = await blogApi.put(
-      `/blogs/${id}`,
-      formData
-    );
+      const response =
+        await blogApi.put(
+          `/blogs/${id}`,
+          formData
+        );
 
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      getApiErrorMessage(
-        error,
-        "Failed to update blog."
-      )
-    );
-  }
-};
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(
+          error,
+          "Failed to update blog."
+        )
+      );
+    }
+  };
 
 /*
 |--------------------------------------------------------------------------
@@ -470,26 +736,30 @@ export const updateBlogApi = async (
 |--------------------------------------------------------------------------
 */
 
-export const deleteBlogApi = async (id) => {
-  if (!id) {
-    throw new Error("Blog ID is required.");
-  }
+export const deleteBlogApi =
+  async (id) => {
+    if (!id) {
+      throw new Error(
+        "Blog ID is required."
+      );
+    }
 
-  try {
-    const response = await blogApi.delete(
-      `/blogs/${id}`
-    );
+    try {
+      const response =
+        await blogApi.delete(
+          `/blogs/${id}`
+        );
 
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      getApiErrorMessage(
-        error,
-        "Failed to delete blog."
-      )
-    );
-  }
-};
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(
+          error,
+          "Failed to delete blog."
+        )
+      );
+    }
+  };
 
 /*
 |--------------------------------------------------------------------------
@@ -501,26 +771,30 @@ export const deleteBlogApi = async (id) => {
 |--------------------------------------------------------------------------
 */
 
-export const toggleBlogPublishApi = async (id) => {
-  if (!id) {
-    throw new Error("Blog ID is required.");
-  }
+export const toggleBlogPublishApi =
+  async (id) => {
+    if (!id) {
+      throw new Error(
+        "Blog ID is required."
+      );
+    }
 
-  try {
-    const response = await blogApi.patch(
-      `/blogs/${id}/toggle-publish`
-    );
+    try {
+      const response =
+        await blogApi.patch(
+          `/blogs/${id}/toggle-publish`
+        );
 
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      getApiErrorMessage(
-        error,
-        "Failed to change blog publish status."
-      )
-    );
-  }
-};
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(
+          error,
+          "Failed to change blog publish status."
+        )
+      );
+    }
+  };
 
 /*
 |--------------------------------------------------------------------------
@@ -532,26 +806,30 @@ export const toggleBlogPublishApi = async (id) => {
 |--------------------------------------------------------------------------
 */
 
-export const incrementBlogViewsApi = async (id) => {
-  if (!id) {
-    throw new Error("Blog ID is required.");
-  }
+export const incrementBlogViewsApi =
+  async (id) => {
+    if (!id) {
+      throw new Error(
+        "Blog ID is required."
+      );
+    }
 
-  try {
-    const response = await blogApi.patch(
-      `/blogs/${id}/views`
-    );
+    try {
+      const response =
+        await blogApi.patch(
+          `/blogs/${id}/views`
+        );
 
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      getApiErrorMessage(
-        error,
-        "Failed to update blog views."
-      )
-    );
-  }
-};
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(
+          error,
+          "Failed to update blog views."
+        )
+      );
+    }
+  };
 
 /*
 |--------------------------------------------------------------------------
@@ -560,9 +838,9 @@ export const incrementBlogViewsApi = async (id) => {
 |
 | Backend may return:
 |
-| /uploads/blog/image.jpg
+| /uploads/blogs/image.jpg
 |
-| uploads/blog/image.jpg
+| uploads/blogs/image.jpg
 |
 | http://...
 |
@@ -571,7 +849,9 @@ export const incrementBlogViewsApi = async (id) => {
 |--------------------------------------------------------------------------
 */
 
-export const getBlogImageUrl = (imageUrl) => {
+export const getBlogImageUrl = (
+  imageUrl
+) => {
   if (
     !imageUrl ||
     typeof imageUrl !== "string"
@@ -579,7 +859,8 @@ export const getBlogImageUrl = (imageUrl) => {
     return null;
   }
 
-  const trimmedUrl = imageUrl.trim();
+  const trimmedUrl =
+    imageUrl.trim();
 
   if (!trimmedUrl) {
     return null;
@@ -592,9 +873,18 @@ export const getBlogImageUrl = (imageUrl) => {
   */
 
   if (
-    trimmedUrl.startsWith("http://") ||
-    trimmedUrl.startsWith("https://") ||
-    trimmedUrl.startsWith("data:")
+    trimmedUrl.startsWith(
+      "http://"
+    ) ||
+    trimmedUrl.startsWith(
+      "https://"
+    ) ||
+    trimmedUrl.startsWith(
+      "data:"
+    ) ||
+    trimmedUrl.startsWith(
+      "blob:"
+    )
   ) {
     return trimmedUrl;
   }
@@ -605,7 +895,9 @@ export const getBlogImageUrl = (imageUrl) => {
   |--------------------------------------------------------------------------
   */
 
-  if (trimmedUrl.startsWith("/")) {
+  if (
+    trimmedUrl.startsWith("/")
+  ) {
     return trimmedUrl;
   }
 
@@ -618,7 +910,9 @@ export const getBlogImageUrl = (imageUrl) => {
 |--------------------------------------------------------------------------
 */
 
-export const getBlogImage = (blog) => {
+export const getBlogImage = (
+  blog
+) => {
   if (!blog) {
     return null;
   }
@@ -633,7 +927,7 @@ export const getBlogImage = (blog) => {
 
 /*
 |--------------------------------------------------------------------------
-| EXPORT
+| DEFAULT EXPORT
 |--------------------------------------------------------------------------
 */
 

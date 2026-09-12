@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const {
@@ -9,10 +10,12 @@ const {
   togglePublish,
   incrementViews,
   getBlogStats,
+  uploadBlogContentImage,
 } = require("../controllers/blog.controller");
 
 const {
   uploadBlogImage,
+  uploadBlogContentImage: uploadContentImage,
 } = require("../middleware/upload.middleware");
 
 const router = express.Router();
@@ -28,6 +31,21 @@ router.get("/", getBlogs);
 // =========================================================
 
 router.get("/stats", getBlogStats);
+
+// =========================================================
+// UPLOAD CONTENT IMAGE
+// =========================================================
+// Used by ReactQuill.
+//
+// This is different from the featured image.
+// Every image inserted into the editor can be uploaded here.
+// =========================================================
+
+router.post(
+  "/upload-image",
+  uploadContentImage.single("contentImage"),
+  uploadBlogContentImage
+);
 
 // =========================================================
 // GET SINGLE BLOG

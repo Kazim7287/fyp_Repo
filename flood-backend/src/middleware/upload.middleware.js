@@ -1,7 +1,7 @@
+
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-
 
 // =========================================================
 // UPLOAD DIRECTORY
@@ -15,36 +15,27 @@ const uploadDirectory = path.join(
   "blogs"
 );
 
-
 // =========================================================
 // CREATE DIRECTORY IF IT DOES NOT EXIST
 // =========================================================
 
 if (!fs.existsSync(uploadDirectory)) {
-  fs.mkdirSync(
-    uploadDirectory,
-    {
-      recursive: true,
-    }
-  );
+  fs.mkdirSync(uploadDirectory, {
+    recursive: true,
+  });
 }
-
 
 // =========================================================
 // STORAGE CONFIGURATION
 // =========================================================
 
 const storage = multer.diskStorage({
-
   // -------------------------------------------------------
   // Destination
   // -------------------------------------------------------
 
   destination: (req, file, cb) => {
-    cb(
-      null,
-      uploadDirectory
-    );
+    cb(null, uploadDirectory);
   },
 
   // -------------------------------------------------------
@@ -52,39 +43,28 @@ const storage = multer.diskStorage({
   // -------------------------------------------------------
 
   filename: (req, file, cb) => {
+    const extension = path
+      .extname(file.originalname)
+      .toLowerCase();
 
-    const extension =
-      path.extname(
-        file.originalname
-      ).toLowerCase();
+    const prefix =
+      file.fieldname === "contentImage"
+        ? "content"
+        : "blog";
 
-    const uniqueName =
-      `blog-${Date.now()}-${Math.round(
-        Math.random() * 1e9
-      )}${extension}`;
+    const uniqueName = `${prefix}-${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}${extension}`;
 
-    cb(
-      null,
-      uniqueName
-    );
+    cb(null, uniqueName);
   },
 });
-
 
 // =========================================================
 // FILE FILTER
 // =========================================================
 
-const fileFilter = (
-  req,
-  file,
-  cb
-) => {
-
-  // -------------------------------------------------------
-  // Allowed MIME types
-  // -------------------------------------------------------
-
+const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     "image/jpeg",
     "image/png",
@@ -92,24 +72,9 @@ const fileFilter = (
     "image/gif",
   ];
 
-  // -------------------------------------------------------
-  // Check MIME type
-  // -------------------------------------------------------
-
-  if (
-    allowedMimeTypes.includes(
-      file.mimetype
-    )
-  ) {
-    return cb(
-      null,
-      true
-    );
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    return cb(null, true);
   }
-
-  // -------------------------------------------------------
-  // Reject unsupported file
-  // -------------------------------------------------------
 
   return cb(
     new Error(
@@ -119,26 +84,39 @@ const fileFilter = (
   );
 };
 
+// =========================================================
+// FEATURED IMAGE UPLOAD
+// =========================================================
+
+const uploadBlogImage = multer({
+  storage,
+  fileFilter,
+
+  limits: {
+    // 5 MB
+    fileSize: 5 * 1024 * 1024,
+
+    // Featured image = one file
+    files: 1,
+  },
+});
 
 // =========================================================
-// MULTER INSTANCE
+// CONTENT IMAGE UPLOAD
 // =========================================================
 
-const uploadBlogImage =
-  multer({
-    storage,
+const uploadBlogContentImage = multer({
+  storage,
+  fileFilter,
 
-    fileFilter,
+  limits: {
+    // 5 MB per image
+    fileSize: 5 * 1024 * 1024,
 
-    limits: {
-      // 5 MB
-      fileSize:
-        5 * 1024 * 1024,
-
-      files: 1,
-    },
-  });
-
+    // One image per editor upload request
+    files: 1,
+  },
+});
 
 // =========================================================
 // EXPORT
@@ -146,5 +124,6 @@ const uploadBlogImage =
 
 module.exports = {
   uploadBlogImage,
+  uploadBlogContentImage,
   uploadDirectory,
 };
