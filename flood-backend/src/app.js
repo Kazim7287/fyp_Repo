@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -41,6 +42,12 @@ const researchRoutes = require("./routes/research.routes");
 // ---------------------------------------------------------
 
 const announcementRoutes = require("./routes/announcement.routes");
+
+// ---------------------------------------------------------
+// NEWS ROUTES
+// ---------------------------------------------------------
+
+const newsRoutes = require("./routes/news.routes");
 
 const app = express();
 
@@ -376,6 +383,26 @@ app.use(
 app.use(
   "/api/announcements",
   announcementRoutes
+);
+
+// =========================================================
+// NEWS MANAGEMENT ROUTES
+// =========================================================
+//
+// GET    /api/news
+// GET    /api/news/stats
+// GET    /api/news/:id
+// POST   /api/news
+// PUT    /api/news/:id
+// DELETE /api/news/:id
+// PATCH  /api/news/:id/status
+// PATCH  /api/news/:id/featured
+//
+// =========================================================
+
+app.use(
+  "/api/news",
+  newsRoutes
 );
 
 // =========================================================

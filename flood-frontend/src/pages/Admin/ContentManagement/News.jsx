@@ -1,139 +1,214 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
+  Alert,
+  Badge,
+  Button,
   Card,
   Col,
-  Row,
-  Table,
-  Typography,
-  Space,
-  Button,
-  Tag,
-  Input,
-  Select,
-  Modal,
+  Descriptions,
+  Divider,
   Form,
-  message,
+  Input,
+  Modal,
   Popconfirm,
-  DatePicker,
+  Row,
+  Select,
+  Space,
+  Statistic,
   Switch,
+  Table,
+  Tag,
   Tooltip,
+  Typography,
+  message,
 } from "antd";
 
 import {
-  PlusOutlined,
-  EditOutlined,
   DeleteOutlined,
+  EditOutlined,
   EyeOutlined,
-  SearchOutlined,
-  ReloadOutlined,
   FileTextOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
+  PlusOutlined,
+  StarFilled,
   StarOutlined,
-  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 
-const { Title, Text } = Typography;
+import { useDispatch, useSelector } from "react-redux";
 
-const { TextArea } = Input;
+import {
+  createNews,
+  deleteNews,
+  fetchNews,
+  fetchNewsStats,
+  selectNews,
+  selectNewsError,
+  selectNewsLoading,
+  selectNewsMutationError,
+  selectNewsMutationLoading,
+  selectNewsStats,
+  updateNews,
+  updateNewsFeatured,
+  updateNewsStatus,
+} from "../../../store/slices/newsSlice";
 
-/* =========================================================
-   SAMPLE NEWS DATA
-========================================================= */
+// =========================================================
+// CONSTANTS
+// =========================================================
 
-const initialNews = [
+const CATEGORY_OPTIONS = [
   {
-    id: 1,
-    title: "FloodGuard Early Warning System Prototype Launched",
-    category: "Project Update",
-    author: "Admin",
-    date: "2026-08-18",
-    status: "Published",
-    featured: true,
-    description:
-      "The FloodGuard flood early warning system prototype has entered the initial development phase.",
+    label: "Project Update",
+    value: "Project Update",
   },
-
   {
-    id: 2,
-    title: "New Monitoring Stations Planned for Nowshera",
-    category: "Infrastructure",
-    author: "Admin",
-    date: "2026-08-15",
-    status: "Published",
-    featured: false,
-    description:
-      "Additional IoT-based monitoring stations are planned to improve flood monitoring coverage.",
+    label: "Infrastructure",
+    value: "Infrastructure",
   },
-
   {
-    id: 3,
-    title: "AI Flood Forecasting Module Under Development",
-    category: "Technology",
-    author: "AI Team",
-    date: "2026-08-12",
-    status: "Draft",
-    featured: true,
-    description:
-      "The AI forecasting module will combine time-series forecasting and flood-risk classification models.",
+    label: "Technology",
+    value: "Technology",
   },
-
   {
-    id: 4,
-    title: "Flood Awareness Campaign",
-    category: "Awareness",
-    author: "Admin",
-    date: "2026-08-10",
-    status: "Published",
-    featured: false,
-    description:
-      "FloodGuard is preparing educational material to improve community awareness and preparedness.",
+    label: "Awareness",
+    value: "Awareness",
   },
 ];
 
-/* =========================================================
-   STATUS TAG
-========================================================= */
+const STATUS_OPTIONS = [
+  {
+    label: "Published",
+    value: "Published",
+  },
+  {
+    label: "Draft",
+    value: "Draft",
+  },
+];
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+const formatDate = (value) => {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleDateString("en-PK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-PK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 const getStatusTag = (status) => {
   if (status === "Published") {
     return (
-      <Tag
-        icon={<CheckCircleOutlined />}
-        color="success"
-      >
+      <Tag color="green">
         Published
       </Tag>
     );
   }
 
   return (
-    <Tag
-      icon={<ClockCircleOutlined />}
-      color="warning"
-    >
+    <Tag color="orange">
       Draft
     </Tag>
   );
 };
 
-/* =========================================================
-   COMPONENT
-========================================================= */
+const getCategoryTag = (category) => {
+  const colors = {
+    "Project Update": "blue",
+    Infrastructure: "purple",
+    Technology: "cyan",
+    Awareness: "gold",
+  };
+
+  return (
+    <Tag color={colors[category] || "default"}>
+      {category || "General"}
+    </Tag>
+  );
+};
+
+// =========================================================
+// COMPONENT
+// =========================================================
 
 const News = () => {
-  const [news, setNews] = useState(initialNews);
+  const dispatch = useDispatch();
 
-  const [searchText, setSearchText] = useState("");
+  // =======================================================
+  // REDUX
+  // =======================================================
+
+  const news = useSelector(selectNews);
+  const stats = useSelector(selectNewsStats);
+
+  const loading = useSelector(
+    selectNewsLoading
+  );
+
+  const mutationLoading = useSelector(
+    selectNewsMutationLoading
+  );
+
+  const newsError = useSelector(
+    selectNewsError
+  );
+
+  const mutationError = useSelector(
+    selectNewsMutationError
+  );
+
+  // =======================================================
+  // LOCAL STATE
+  // =======================================================
+
+  const [search, setSearch] = useState("");
 
   const [statusFilter, setStatusFilter] =
-    useState("all");
+    useState(undefined);
 
   const [categoryFilter, setCategoryFilter] =
-    useState("all");
+    useState(undefined);
 
-  const [modalOpen, setModalOpen] =
+  const [isModalOpen, setIsModalOpen] =
+    useState(false);
+
+  const [isPreviewOpen, setIsPreviewOpen] =
     useState(false);
 
   const [editingNews, setEditingNews] =
@@ -144,30 +219,96 @@ const News = () => {
 
   const [form] = Form.useForm();
 
-  /* =======================================================
-     FILTERED NEWS
-  ======================================================= */
+  // =======================================================
+  // INITIAL LOAD
+  // =======================================================
+
+  useEffect(() => {
+    loadNews();
+    loadStats();
+  }, []);
+
+  // =======================================================
+  // LOAD NEWS
+  // =======================================================
+
+  const loadNews = () => {
+    const params = {};
+
+    if (statusFilter) {
+      params.status = statusFilter;
+    }
+
+    if (categoryFilter) {
+      params.category = categoryFilter;
+    }
+
+    if (search.trim()) {
+      params.search = search.trim();
+    }
+
+    dispatch(fetchNews(params));
+  };
+
+  // =======================================================
+  // LOAD STATS
+  // =======================================================
+
+  const loadStats = () => {
+    dispatch(fetchNewsStats());
+  };
+
+  // =======================================================
+  // FILTER HANDLERS
+  // =======================================================
+
+  const handleSearch = () => {
+    loadNews();
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setStatusFilter(undefined);
+    setCategoryFilter(undefined);
+
+    dispatch(
+      fetchNews({})
+    );
+  };
+
+  // =======================================================
+  // LOCAL FILTER
+  // =======================================================
+  //
+  // Backend filtering is already applied.
+  // This additional filter keeps the table responsive
+  // while the user is working with the loaded data.
+  //
+  // =======================================================
 
   const filteredNews = useMemo(() => {
+    const normalizedSearch =
+      search.trim().toLowerCase();
+
     return news.filter((item) => {
       const matchesSearch =
+        !normalizedSearch ||
         item.title
-          .toLowerCase()
-          .includes(
-            searchText.toLowerCase()
-          ) ||
+          ?.toLowerCase()
+          .includes(normalizedSearch) ||
         item.description
-          .toLowerCase()
-          .includes(
-            searchText.toLowerCase()
-          );
+          ?.toLowerCase()
+          .includes(normalizedSearch) ||
+        item.category
+          ?.toLowerCase()
+          .includes(normalizedSearch);
 
       const matchesStatus =
-        statusFilter === "all" ||
+        !statusFilter ||
         item.status === statusFilter;
 
       const matchesCategory =
-        categoryFilter === "all" ||
+        !categoryFilter ||
         item.category === categoryFilter;
 
       return (
@@ -178,46 +319,31 @@ const News = () => {
     });
   }, [
     news,
-    searchText,
+    search,
     statusFilter,
     categoryFilter,
   ]);
 
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
-
-  const totalNews = news.length;
-
-  const publishedNews = news.filter(
-    (item) =>
-      item.status === "Published"
-  ).length;
-
-  const draftNews = news.filter(
-    (item) =>
-      item.status === "Draft"
-  ).length;
-
-  const featuredNews = news.filter(
-    (item) => item.featured
-  ).length;
-
-  /* =======================================================
-     OPEN CREATE MODAL
-  ======================================================= */
+  // =======================================================
+  // OPEN CREATE MODAL
+  // =======================================================
 
   const handleCreate = () => {
     setEditingNews(null);
 
     form.resetFields();
 
-    setModalOpen(true);
+    form.setFieldsValue({
+      status: "Draft",
+      featured: false,
+    });
+
+    setIsModalOpen(true);
   };
 
-  /* =======================================================
-     OPEN EDIT MODAL
-  ======================================================= */
+  // =======================================================
+  // OPEN EDIT MODAL
+  // =======================================================
 
   const handleEdit = (record) => {
     setEditingNews(record);
@@ -226,184 +352,302 @@ const News = () => {
       title: record.title,
       category: record.category,
       description: record.description,
-      status: record.status,
-      featured: record.featured,
+      status: record.status || "Draft",
+      featured: Boolean(record.featured),
+      publishedAt:
+        record.publishedAt || null,
     });
 
-    setModalOpen(true);
+    setIsModalOpen(true);
   };
 
-  /* =======================================================
-     SAVE NEWS
-  ======================================================= */
+  // =======================================================
+  // OPEN PREVIEW
+  // =======================================================
 
-  const handleSave = async () => {
+  const handlePreview = (record) => {
+    setPreviewNews(record);
+    setIsPreviewOpen(true);
+  };
+
+  // =======================================================
+  // CLOSE FORM MODAL
+  // =======================================================
+
+  const handleCloseModal = () => {
+    if (mutationLoading) {
+      return;
+    }
+
+    setIsModalOpen(false);
+    setEditingNews(null);
+    form.resetFields();
+  };
+
+  // =======================================================
+  // SUBMIT FORM
+  // =======================================================
+
+  const handleSubmit = async () => {
     try {
       const values =
         await form.validateFields();
 
-      if (editingNews) {
-        setNews((previous) =>
-          previous.map((item) =>
-            item.id === editingNews.id
-              ? {
-                  ...item,
-                  title: values.title,
-                  category:
-                    values.category,
-                  description:
-                    values.description,
-                  status: values.status,
-                  featured:
-                    values.featured || false,
-                }
-              : item
-          )
-        );
+      const payload = {
+        title: values.title.trim(),
+        category: values.category,
+        description:
+          values.description.trim(),
+        status: values.status || "Draft",
+        featured:
+          Boolean(values.featured),
+      };
 
-        message.success(
-          "News updated successfully"
-        );
+      // ---------------------------------------------------
+      // Published date
+      // ---------------------------------------------------
+
+      if (
+        values.status === "Published"
+      ) {
+        payload.published_at =
+          editingNews?.publishedAt ||
+          editingNews?.published_at ||
+          new Date().toISOString();
       } else {
-        const newNews = {
-          id: Date.now(),
-
-          title: values.title,
-
-          category:
-            values.category,
-
-          author: "Admin",
-
-          date: new Date()
-            .toISOString()
-            .split("T")[0],
-
-          status:
-            values.status || "Draft",
-
-          featured:
-            values.featured || false,
-
-          description:
-            values.description,
-        };
-
-        setNews((previous) => [
-          newNews,
-          ...previous,
-        ]);
-
-        message.success(
-          "News created successfully"
-        );
+        payload.published_at = null;
       }
 
-      setModalOpen(false);
+      // ---------------------------------------------------
+      // UPDATE
+      // ---------------------------------------------------
 
-      form.resetFields();
+      if (editingNews) {
+        const result =
+          await dispatch(
+            updateNews({
+              id: editingNews.id,
+              data: payload,
+            })
+          );
 
-      setEditingNews(null);
+        if (
+          updateNews.fulfilled.match(result)
+        ) {
+          message.success(
+            "News updated successfully."
+          );
+
+          setIsModalOpen(false);
+          setEditingNews(null);
+          form.resetFields();
+
+          await Promise.all([
+            dispatch(fetchNews({})),
+            dispatch(fetchNewsStats()),
+          ]);
+        }
+
+        return;
+      }
+
+      // ---------------------------------------------------
+      // CREATE
+      // ---------------------------------------------------
+
+      const result =
+        await dispatch(
+          createNews(payload)
+        );
+
+      if (
+        createNews.fulfilled.match(result)
+      ) {
+        message.success(
+          "News created successfully."
+        );
+
+        setIsModalOpen(false);
+        form.resetFields();
+
+        await Promise.all([
+          dispatch(fetchNews({})),
+          dispatch(fetchNewsStats()),
+        ]);
+      }
     } catch (error) {
-      // Validation error
+      // Ant Design validation errors are handled
+      // automatically by Form.
+      if (
+        error?.errorFields
+      ) {
+        return;
+      }
+
+      console.error(
+        "News form submission error:",
+        error
+      );
     }
   };
 
-  /* =======================================================
-     DELETE NEWS
-  ======================================================= */
+  // =======================================================
+  // DELETE NEWS
+  // =======================================================
 
-  const handleDelete = (id) => {
-    setNews((previous) =>
-      previous.filter(
-        (item) => item.id !== id
-      )
-    );
+  const handleDelete = async (id) => {
+    const result =
+      await dispatch(
+        deleteNews(id)
+      );
 
-    message.success(
-      "News deleted successfully"
-    );
+    if (
+      deleteNews.fulfilled.match(result)
+    ) {
+      message.success(
+        "News deleted successfully."
+      );
+
+      await Promise.all([
+        dispatch(fetchNews({})),
+        dispatch(fetchNewsStats()),
+      ]);
+    } else {
+      message.error(
+        result.payload ||
+          "Failed to delete news."
+      );
+    }
   };
 
-  /* =======================================================
-     TOGGLE PUBLISH STATUS
-  ======================================================= */
+  // =======================================================
+  // STATUS TOGGLE
+  // =======================================================
 
-  const toggleStatus = (record) => {
+  const handleStatusChange = async (
+    record
+  ) => {
     const newStatus =
       record.status === "Published"
         ? "Draft"
         : "Published";
 
-    setNews((previous) =>
-      previous.map((item) =>
-        item.id === record.id
-          ? {
-              ...item,
-              status: newStatus,
-            }
-          : item
-      )
-    );
+    const result =
+      await dispatch(
+        updateNewsStatus({
+          id: record.id,
+          status: newStatus,
+        })
+      );
 
-    message.success(
-      newStatus === "Published"
-        ? "News published"
-        : "News moved to draft"
-    );
+    if (
+      updateNewsStatus.fulfilled.match(
+        result
+      )
+    ) {
+      message.success(
+        `News ${
+          newStatus === "Published"
+            ? "published"
+            : "moved to draft"
+        } successfully.`
+      );
+
+      await Promise.all([
+        dispatch(fetchNews({})),
+        dispatch(fetchNewsStats()),
+      ]);
+    } else {
+      message.error(
+        result.payload ||
+          "Failed to update status."
+      );
+    }
   };
 
-  /* =======================================================
-     TABLE COLUMNS
-  ======================================================= */
+  // =======================================================
+  // FEATURED TOGGLE
+  // =======================================================
+
+  const handleFeaturedChange = async (
+    record,
+    featured
+  ) => {
+    const result =
+      await dispatch(
+        updateNewsFeatured({
+          id: record.id,
+          featured,
+        })
+      );
+
+    if (
+      updateNewsFeatured.fulfilled.match(
+        result
+      )
+    ) {
+      message.success(
+        featured
+          ? "News marked as featured."
+          : "News removed from featured."
+      );
+
+      await Promise.all([
+        dispatch(fetchNews({})),
+        dispatch(fetchNewsStats()),
+      ]);
+    } else {
+      message.error(
+        result.payload ||
+          "Failed to update featured status."
+      );
+    }
+  };
+
+  // =======================================================
+  // TABLE COLUMNS
+  // =======================================================
 
   const columns = [
     {
       title: "News",
-      key: "title",
-      width: 330,
+      key: "news",
+      width: 350,
 
       render: (_, record) => (
         <Space
-          align="start"
-          size={12}
+          direction="vertical"
+          size={2}
         >
-          <FileTextOutlined
-            style={{
-              fontSize: 20,
-              marginTop: 3,
-              color: "#1677ff",
-            }}
-          />
+          <Space size={6}>
+            {record.featured ? (
+              <Tooltip title="Featured">
+                <StarFilled />
+              </Tooltip>
+            ) : null}
 
-          <div>
-            <Space size={6}>
-              <Text strong>
-                {record.title}
-              </Text>
-
-              {record.featured && (
-                <Tooltip title="Featured News">
-                  <StarOutlined
-                    style={{
-                      color: "#faad14",
-                    }}
-                  />
-                </Tooltip>
-              )}
-            </Space>
-
-            <br />
-
-            <Text
-              type="secondary"
+            <Typography.Text
+              strong
+              ellipsis
               style={{
-                fontSize: 12,
+                maxWidth: 300,
+                display: "inline-block",
               }}
             >
-              {record.description}
-            </Text>
-          </div>
+              {record.title}
+            </Typography.Text>
+          </Space>
+
+          <Typography.Text
+            type="secondary"
+            ellipsis
+            style={{
+              maxWidth: 320,
+              display: "inline-block",
+            }}
+          >
+            {record.description}
+          </Typography.Text>
         </Space>
       ),
     },
@@ -412,43 +656,84 @@ const News = () => {
       title: "Category",
       dataIndex: "category",
       key: "category",
+      width: 160,
 
-      render: (value) => (
-        <Tag color="blue">
-          {value}
-        </Tag>
-      ),
+      render: (category) =>
+        getCategoryTag(category),
     },
 
     {
       title: "Author",
-      dataIndex: "author",
       key: "author",
+      width: 130,
+
+      render: (_, record) => (
+        <Typography.Text>
+          {record.authorName ||
+            record.author_name ||
+            (record.authorId
+              ? `User #${record.authorId}`
+              : "Administrator")}
+        </Typography.Text>
+      ),
     },
 
     {
-      title: "Date",
-      dataIndex: "date",
-      key: "date",
+      title: "Published",
+      key: "publishedAt",
+      width: 140,
+
+      render: (_, record) =>
+        formatDate(
+          record.publishedAt
+        ),
     },
 
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
+      width: 120,
 
-      render: (value) =>
-        getStatusTag(value),
+      render: (status) =>
+        getStatusTag(status),
     },
 
     {
-      title: "Action",
-      key: "action",
-      fixed: "right",
-      width: 180,
+      title: "Featured",
+      key: "featured",
+      width: 110,
+      align: "center",
 
       render: (_, record) => (
-        <Space>
+        <Switch
+          checked={Boolean(
+            record.featured
+          )}
+          checkedChildren={
+            <StarFilled />
+          }
+          unCheckedChildren={
+            <StarOutlined />
+          }
+          loading={mutationLoading}
+          onChange={(checked) =>
+            handleFeaturedChange(
+              record,
+              checked
+            )
+          }
+        />
+      ),
+    },
+
+    {
+      title: "Actions",
+      key: "actions",
+      width: 230,
+
+      render: (_, record) => (
+        <Space size="small">
           <Tooltip title="Preview">
             <Button
               type="text"
@@ -456,7 +741,7 @@ const News = () => {
                 <EyeOutlined />
               }
               onClick={() =>
-                setPreviewNews(record)
+                handlePreview(record)
               }
             />
           </Tooltip>
@@ -483,22 +768,21 @@ const News = () => {
           >
             <Button
               type="text"
-              icon={
-                record.status ===
-                "Published" ? (
-                  <ClockCircleOutlined />
-                ) : (
-                  <CheckCircleOutlined />
+              onClick={() =>
+                handleStatusChange(
+                  record
                 )
               }
-              onClick={() =>
-                toggleStatus(record)
-              }
-            />
+            >
+              {record.status ===
+              "Published"
+                ? "Draft"
+                : "Publish"}
+            </Button>
           </Tooltip>
 
           <Popconfirm
-            title="Delete this news?"
+            title="Delete this news item?"
             description="This action cannot be undone."
             okText="Delete"
             cancelText="Cancel"
@@ -507,9 +791,6 @@ const News = () => {
             }}
             onConfirm={() =>
               handleDelete(record.id)
-            }
-            icon={
-              <ExclamationCircleOutlined />
             }
           >
             <Tooltip title="Delete">
@@ -527,65 +808,103 @@ const News = () => {
     },
   ];
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  // =======================================================
+  // RENDER
+  // =======================================================
 
   return (
-    <div>
-
-      {/* =================================================
-          PAGE HEADER
-      ================================================= */}
-
-      <div
-        style={{
-          marginBottom: 24,
-
-          display: "flex",
-
-          justifyContent:
-            "space-between",
-
-          alignItems: "center",
-
-          gap: 16,
-
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <Title
-            level={3}
-            style={{
-              margin: 0,
-            }}
-          >
-            News Management
-          </Title>
-
-          <Text type="secondary">
-            Create, manage, publish, and
-            organize FloodGuard news and
-            project updates.
-          </Text>
-        </div>
-
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleCreate}
-        >
-          Create News
-        </Button>
-      </div>
-
-      {/* =================================================
-          STATISTICS
-      ================================================= */}
+    <div
+      style={{
+        padding: 24,
+      }}
+    >
+      {/* ===================================================
+          HEADER
+      =================================================== */}
 
       <Row
-        gutter={[16, 16]}
+        justify="space-between"
+        align="middle"
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <Col>
+          <Space
+            direction="vertical"
+            size={2}
+          >
+            <Typography.Title
+              level={2}
+              style={{
+                margin: 0,
+              }}
+            >
+              News Management
+            </Typography.Title>
+
+            <Typography.Text type="secondary">
+              Manage flood forecasting news,
+              project updates and awareness
+              information.
+            </Typography.Text>
+          </Space>
+        </Col>
+
+        <Col>
+          <Button
+            type="primary"
+            icon={
+              <PlusOutlined />
+            }
+            onClick={handleCreate}
+          >
+            Add News
+          </Button>
+        </Col>
+      </Row>
+
+      {/* ===================================================
+          ERROR
+      =================================================== */}
+
+      {newsError ? (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          message="Failed to load news"
+          description={newsError}
+          style={{
+            marginBottom: 20,
+          }}
+        />
+      ) : null}
+
+      {mutationError ? (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          message="News operation failed"
+          description={
+            mutationError
+          }
+          style={{
+            marginBottom: 20,
+          }}
+        />
+      ) : null}
+
+      {/* ===================================================
+          STATISTICS
+      =================================================== */}
+
+      <Row
+        gutter={[
+          16,
+          16,
+        ]}
         style={{
           marginBottom: 24,
         }}
@@ -596,19 +915,15 @@ const News = () => {
           lg={6}
         >
           <Card>
-            <Text type="secondary">
-              Total News
-            </Text>
-
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 600,
-                marginTop: 6,
-              }}
-            >
-              {totalNews}
-            </div>
+            <Statistic
+              title="Total News"
+              value={
+                stats.total_news || 0
+              }
+              prefix={
+                <FileTextOutlined />
+              }
+            />
           </Card>
         </Col>
 
@@ -618,19 +933,16 @@ const News = () => {
           lg={6}
         >
           <Card>
-            <Text type="secondary">
-              Published
-            </Text>
-
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 600,
-                marginTop: 6,
+            <Statistic
+              title="Published"
+              value={
+                stats.published_news ||
+                0
+              }
+              valueStyle={{
+                color: "#3f8600",
               }}
-            >
-              {publishedNews}
-            </div>
+            />
           </Card>
         </Col>
 
@@ -640,19 +952,15 @@ const News = () => {
           lg={6}
         >
           <Card>
-            <Text type="secondary">
-              Drafts
-            </Text>
-
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 600,
-                marginTop: 6,
+            <Statistic
+              title="Draft"
+              value={
+                stats.draft_news || 0
+              }
+              valueStyle={{
+                color: "#d48806",
               }}
-            >
-              {draftNews}
-            </div>
+            />
           </Card>
         </Col>
 
@@ -662,61 +970,77 @@ const News = () => {
           lg={6}
         >
           <Card>
-            <Text type="secondary">
-              Featured
-            </Text>
-
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 600,
-                marginTop: 6,
-              }}
-            >
-              {featuredNews}
-            </div>
+            <Statistic
+              title="Featured"
+              value={
+                stats.featured_news ||
+                0
+              }
+              prefix={
+                <StarOutlined />
+              }
+            />
           </Card>
         </Col>
       </Row>
 
-      {/* =================================================
-          NEWS TABLE
-      ================================================= */}
+      {/* ===================================================
+          FILTERS
+      =================================================== */}
 
       <Card
-        title={
-          <Space>
-            <FileTextOutlined />
-
-            <span>
-              News Articles
-            </span>
-          </Space>
-        }
+        style={{
+          marginBottom: 20,
+        }}
       >
-
-        {/* FILTERS */}
-
         <Row
-          gutter={[12, 12]}
-          style={{
-            marginBottom: 20,
-          }}
+          gutter={[
+            12,
+            12,
+          ]}
+          align="middle"
         >
           <Col
             xs={24}
-            md={10}
+            md={8}
+            lg={8}
           >
-            <Input
+            <Input.Search
               allowClear
-              prefix={
-                <SearchOutlined />
-              }
               placeholder="Search news..."
-              value={searchText}
+              value={search}
               onChange={(event) =>
-                setSearchText(
+                setSearch(
                   event.target.value
+                )
+              }
+              onSearch={
+                handleSearch
+              }
+              enterButton="Search"
+            />
+          </Col>
+
+          <Col
+            xs={24}
+            sm={12}
+            md={5}
+          >
+            <Select
+              allowClear
+              placeholder="Filter by status"
+              style={{
+                width: "100%",
+              }}
+              value={
+                statusFilter
+              }
+              options={
+                STATUS_OPTIONS
+              }
+              onChange={(value) =>
+                setStatusFilter(
+                  value
                 )
               }
             />
@@ -728,101 +1052,83 @@ const News = () => {
             md={5}
           >
             <Select
+              allowClear
+              placeholder="Filter by category"
               style={{
                 width: "100%",
               }}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={[
-                {
-                  label: "All Status",
-                  value: "all",
-                },
-                {
-                  label: "Published",
-                  value: "Published",
-                },
-                {
-                  label: "Draft",
-                  value: "Draft",
-                },
-              ]}
+              value={
+                categoryFilter
+              }
+              options={
+                CATEGORY_OPTIONS
+              }
+              onChange={(value) =>
+                setCategoryFilter(
+                  value
+                )
+              }
             />
           </Col>
 
           <Col
             xs={24}
-            sm={12}
             md={6}
           >
-            <Select
-              style={{
-                width: "100%",
-              }}
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              options={[
-                {
-                  label: "All Categories",
-                  value: "all",
-                },
-                {
-                  label: "Project Update",
-                  value: "Project Update",
-                },
-                {
-                  label: "Infrastructure",
-                  value: "Infrastructure",
-                },
-                {
-                  label: "Technology",
-                  value: "Technology",
-                },
-                {
-                  label: "Awareness",
-                  value: "Awareness",
-                },
-              ]}
-            />
-          </Col>
+            <Space>
+              <Button
+                onClick={
+                  handleSearch
+                }
+              >
+                Apply Filters
+              </Button>
 
-          <Col
-            xs={24}
-            md={3}
-          >
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                setSearchText("");
-                setStatusFilter("all");
-                setCategoryFilter("all");
-              }}
-              block
-            >
-              Reset
-            </Button>
+              <Button
+                onClick={
+                  handleClearFilters
+                }
+              >
+                Clear
+              </Button>
+            </Space>
           </Col>
         </Row>
+      </Card>
 
+      {/* ===================================================
+          TABLE
+      =================================================== */}
+
+      <Card>
         <Table
           rowKey="id"
           columns={columns}
-          dataSource={filteredNews}
-          pagination={{
-            pageSize: 8,
-            showSizeChanger: true,
-            showTotal: (total) =>
-              `Total ${total} news`,
-          }}
+          dataSource={
+            filteredNews
+          }
+          loading={loading}
           scroll={{
-            x: 1000,
+            x: 1250,
+          }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (
+              total
+            ) =>
+              `Total ${total} news items`,
+          }}
+          locale={{
+            emptyText:
+              "No news found.",
           }}
         />
       </Card>
 
-      {/* =================================================
+      {/* ===================================================
           CREATE / EDIT MODAL
-      ================================================= */}
+      =================================================== */}
 
       <Modal
         title={
@@ -830,34 +1136,42 @@ const News = () => {
             ? "Edit News"
             : "Create News"
         }
-        open={modalOpen}
-        onCancel={() => {
-          setModalOpen(false);
-          form.resetFields();
-          setEditingNews(null);
-        }}
-        onOk={handleSave}
+        open={isModalOpen}
+        onCancel={
+          handleCloseModal
+        }
+        onOk={handleSubmit}
         okText={
           editingNews
             ? "Update News"
             : "Create News"
         }
+        confirmLoading={
+          mutationLoading
+        }
         width={700}
-        destroyOnClose
+        destroyOnHidden
       >
+        <Divider />
+
         <Form
           form={form}
           layout="vertical"
+          requiredMark="optional"
         >
-
           <Form.Item
-            label="News Title"
             name="title"
+            label="News Title"
             rules={[
               {
                 required: true,
                 message:
-                  "Please enter the news title",
+                  "Please enter the news title.",
+              },
+              {
+                max: 150,
+                message:
+                  "Title cannot exceed 150 characters.",
               },
             ]}
           >
@@ -873,100 +1187,73 @@ const News = () => {
           >
             <Col
               xs={24}
-              sm={12}
+              md={12}
             >
               <Form.Item
-                label="Category"
                 name="category"
+                label="Category"
                 rules={[
                   {
                     required: true,
                     message:
-                      "Please select a category",
+                      "Please select a category.",
                   },
                 ]}
               >
                 <Select
                   placeholder="Select category"
-                  options={[
-                    {
-                      label:
-                        "Project Update",
-                      value:
-                        "Project Update",
-                    },
-                    {
-                      label:
-                        "Infrastructure",
-                      value:
-                        "Infrastructure",
-                    },
-                    {
-                      label:
-                        "Technology",
-                      value:
-                        "Technology",
-                    },
-                    {
-                      label:
-                        "Awareness",
-                      value:
-                        "Awareness",
-                    },
-                  ]}
+                  options={
+                    CATEGORY_OPTIONS
+                  }
                 />
               </Form.Item>
             </Col>
 
             <Col
               xs={24}
-              sm={12}
+              md={12}
             >
               <Form.Item
-                label="Status"
                 name="status"
-                initialValue="Draft"
+                label="Status"
+                rules={[
+                  {
+                    required: true,
+                    message:
+                      "Please select a status.",
+                  },
+                ]}
               >
                 <Select
-                  options={[
-                    {
-                      label: "Draft",
-                      value: "Draft",
-                    },
-                    {
-                      label:
-                        "Published",
-                      value:
-                        "Published",
-                    },
-                  ]}
+                  options={
+                    STATUS_OPTIONS
+                  }
                 />
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item
-            label="News Content"
             name="description"
+            label="Description"
             rules={[
               {
                 required: true,
                 message:
-                  "Please enter news content",
+                  "Please enter the news description.",
               },
             ]}
           >
-            <TextArea
-              rows={6}
-              placeholder="Write the news content..."
-              maxLength={2000}
+            <Input.TextArea
+              placeholder="Write the news description..."
+              rows={7}
               showCount
             />
           </Form.Item>
 
           <Form.Item
-            label="Featured News"
             name="featured"
+            label="Featured News"
             valuePropName="checked"
           >
             <Switch
@@ -975,78 +1262,130 @@ const News = () => {
             />
           </Form.Item>
 
+          <Alert
+            type="info"
+            showIcon
+            message="Publication date"
+            description={
+              "When status is Published, the backend will automatically set the publication date. Draft news will not have a publication date."
+            }
+          />
         </Form>
       </Modal>
 
-      {/* =================================================
+      {/* ===================================================
           PREVIEW MODAL
-      ================================================= */}
+      =================================================== */}
 
       <Modal
         title="News Preview"
-        open={!!previewNews}
+        open={isPreviewOpen}
         onCancel={() =>
-          setPreviewNews(null)
+          setIsPreviewOpen(false)
         }
-        footer={null}
+        footer={[
+          <Button
+            key="close"
+            onClick={() =>
+              setIsPreviewOpen(
+                false
+              )
+            }
+          >
+            Close
+          </Button>,
+        ]}
         width={750}
       >
-        {previewNews && (
+        {previewNews ? (
           <div>
-
             <Space
+              wrap
               style={{
                 marginBottom: 12,
               }}
             >
-              <Tag color="blue">
-                {previewNews.category}
-              </Tag>
+              {getCategoryTag(
+                previewNews.category
+              )}
 
               {getStatusTag(
                 previewNews.status
               )}
 
-              {previewNews.featured && (
+              {previewNews.featured ? (
                 <Tag
-                  icon={<StarOutlined />}
+                  icon={
+                    <StarFilled />
+                  }
                   color="gold"
                 >
                   Featured
                 </Tag>
-              )}
+              ) : null}
             </Space>
 
-            <Title
-              level={2}
+            <Typography.Title
+              level={3}
               style={{
                 marginTop: 8,
               }}
             >
               {previewNews.title}
-            </Title>
+            </Typography.Title>
 
-            <Text type="secondary">
-              Published by{" "}
-              <strong>
-                {previewNews.author}
-              </strong>{" "}
-              • {previewNews.date}
-            </Text>
+            <Descriptions
+              size="small"
+              column={2}
+              bordered
+            >
+              <Descriptions.Item label="Author">
+                {previewNews.authorName ||
+                  previewNews.author_name ||
+                  (previewNews.authorId
+                    ? `User #${previewNews.authorId}`
+                    : "Administrator")}
+              </Descriptions.Item>
 
-            <div
+              <Descriptions.Item label="Published">
+                {formatDate(
+                  previewNews.publishedAt
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Created">
+                {formatDateTime(
+                  previewNews.createdAt
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Updated">
+                {formatDateTime(
+                  previewNews.updatedAt
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider />
+
+            <Typography.Paragraph
               style={{
-                marginTop: 24,
+                whiteSpace:
+                  "pre-wrap",
                 lineHeight: 1.8,
               }}
             >
-              {previewNews.description}
-            </div>
-
+              {
+                previewNews.description
+              }
+            </Typography.Paragraph>
           </div>
+        ) : (
+          <Typography.Text type="secondary">
+            No news selected.
+          </Typography.Text>
         )}
       </Modal>
-
     </div>
   );
 };
