@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const {
@@ -21,17 +22,10 @@ const router = express.Router();
 // PUBLIC ROUTES
 // =========================================================
 
-// Get all announcements
 router.get("/", getAnnouncements);
 
-// Get single announcement
-router.get("/:id", getAnnouncement);
-
-// =========================================================
-// ADMIN ROUTES
-// =========================================================
-
-// Announcement statistics
+// IMPORTANT:
+// /stats MUST come before /:id
 router.get(
   "/stats",
   authenticate,
@@ -39,7 +33,12 @@ router.get(
   getAnnouncementStats
 );
 
-// Create announcement
+router.get("/:id", getAnnouncement);
+
+// =========================================================
+// ADMIN ROUTES
+// =========================================================
+
 router.post(
   "/",
   authenticate,
@@ -47,7 +46,6 @@ router.post(
   createAnnouncement
 );
 
-// Update announcement
 router.put(
   "/:id",
   authenticate,
@@ -55,7 +53,6 @@ router.put(
   updateAnnouncement
 );
 
-// Delete announcement
 router.delete(
   "/:id",
   authenticate,
@@ -63,7 +60,6 @@ router.delete(
   deleteAnnouncement
 );
 
-// Change announcement status
 router.patch(
   "/:id/status",
   authenticate,
