@@ -36,6 +36,12 @@ const blogRoutes = require("./routes/blog.routes");
 
 const researchRoutes = require("./routes/research.routes");
 
+// ---------------------------------------------------------
+// ANNOUNCEMENT ROUTES
+// ---------------------------------------------------------
+
+const announcementRoutes = require("./routes/announcement.routes");
+
 const app = express();
 
 // =========================================================
@@ -351,6 +357,25 @@ app.use(
 app.use(
   "/api/research",
   researchRoutes
+);
+
+// =========================================================
+// ANNOUNCEMENT MANAGEMENT ROUTES
+// =========================================================
+//
+// GET    /api/announcements
+// GET    /api/announcements/stats
+// GET    /api/announcements/:id
+// POST   /api/announcements
+// PUT    /api/announcements/:id
+// DELETE /api/announcements/:id
+// PATCH  /api/announcements/:id/status
+//
+// =========================================================
+
+app.use(
+  "/api/announcements",
+  announcementRoutes
 );
 
 // =========================================================
