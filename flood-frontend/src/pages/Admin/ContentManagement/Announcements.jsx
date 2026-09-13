@@ -1,774 +1,666 @@
-import { useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import dayjs from "dayjs";
 
 import {
-  Card,
-  Typography,
+  Alert,
+  Badge,
   Button,
-  Table,
-  Tag,
-  Space,
-  Modal,
+  Card,
+  Col,
+  DatePicker,
+  Descriptions,
+  Empty,
   Form,
   Input,
-  Select,
-  DatePicker,
-  Switch,
-  Popconfirm,
   message,
+  Modal,
+  Popconfirm,
   Row,
-  Col,
+  Select,
+  Space,
   Statistic,
-  Empty,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
 } from "antd";
 
 import {
-  PlusOutlined,
-  EditOutlined,
+  BellOutlined,
   DeleteOutlined,
+  EditOutlined,
   EyeOutlined,
-  CheckCircleOutlined,
-  FileTextOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 
-import dayjs from "dayjs";
+import {
+  fetchAnnouncements,
+  fetchAnnouncementStats,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  updateAnnouncementStatus,
+  selectAnnouncements,
+  selectAnnouncementStats,
+  selectAnnouncementLoading,
+  selectAnnouncementStatsLoading,
+  selectAnnouncementMutationLoading,
+  selectAnnouncementError,
+  selectAnnouncementStatsError,
+} from "../../../store/slices/announcementSlice";
 
-const { Title, Text } = Typography;
-
+const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
-const { Option } = Select;
-
-
-/* =========================================================
-   SAMPLE ANNOUNCEMENT DATA
-========================================================= */
-
-const initialAnnouncements = [
-  {
-    id: 1,
-    title: "Flood Monitoring System Activated",
-    category: "System Update",
-    priority: "High",
-    status: "Published",
-    publishedAt: "2026-08-20",
-    expiresAt: "2026-09-20",
-    author: "Administrator",
-    content:
-      "The flood monitoring and early-warning system is now actively monitoring designated stations.",
-  },
-
-  {
-    id: 2,
-    title: "Heavy Rainfall Advisory",
-    category: "Weather Advisory",
-    priority: "Critical",
-    status: "Published",
-    publishedAt: "2026-08-19",
-    expiresAt: "2026-08-25",
-    author: "Administrator",
-    content:
-      "Residents in vulnerable areas are advised to remain alert due to expected heavy rainfall.",
-  },
-
-  {
-    id: 3,
-    title: "Scheduled System Maintenance",
-    category: "Maintenance",
-    priority: "Medium",
-    status: "Draft",
-    publishedAt: null,
-    expiresAt: null,
-    author: "Administrator",
-    content:
-      "The monitoring platform will undergo scheduled maintenance.",
-  },
-
-  {
-    id: 4,
-    title: "Emergency Preparedness Information",
-    category: "Emergency",
-    priority: "High",
-    status: "Archived",
-    publishedAt: "2026-07-15",
-    expiresAt: "2026-08-01",
-    author: "Administrator",
-    content:
-      "Emergency preparedness guidelines for communities located near flood-prone areas.",
-  },
+const categoryOptions = [
+  { value: "System Update", label: "System Update" },
+  { value: "Weather Advisory", label: "Weather Advisory" },
+  { value: "Maintenance", label: "Maintenance" },
+  { value: "Emergency", label: "Emergency" },
+  { value: "General", label: "General" },
 ];
 
+const priorityOptions = [
+  { value: "Critical", label: "Critical" },
+  { value: "High", label: "High" },
+  { value: "Medium", label: "Medium" },
+  { value: "Low", label: "Low" },
+];
 
-/* =========================================================
-   COMPONENT
-========================================================= */
+const statusOptions = [
+  { value: "Draft", label: "Draft" },
+  { value: "Published", label: "Published" },
+  { value: "Archived", label: "Archived" },
+];
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case "Published":
+      return "green";
+    case "Draft":
+      return "orange";
+    case "Archived":
+      return "default";
+    default:
+      return "default";
+  }
+};
+
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case "Critical":
+      return "red";
+    case "High":
+      return "orange";
+    case "Medium":
+      return "blue";
+    case "Low":
+      return "green";
+    default:
+      return "default";
+  }
+};
+
+const formatDate = (value) => {
+  if (!value) {
+    return "—";
+  }
+
+  const parsed = dayjs(value);
+
+  if (!parsed.isValid()) {
+    return "—";
+  }
+
+  return parsed.format("DD MMM YYYY, hh:mm A");
+};
+
+const normalizeAnnouncementForForm = (announcement) => {
+  if (!announcement) {
+    return {};
+  }
+
+  return {
+    title: announcement.title || "",
+    category: announcement.category || "General",
+    priority: announcement.priority || "Medium",
+    status: announcement.status || "Draft",
+    publishedAt: announcement.published_at
+      ? dayjs(announcement.published_at)
+      : announcement.publishedAt
+        ? dayjs(announcement.publishedAt)
+        : null,
+    expiresAt: announcement.expires_at
+      ? dayjs(announcement.expires_at)
+      : announcement.expiresAt
+        ? dayjs(announcement.expiresAt)
+        : null,
+    content: announcement.content || "",
+  };
+};
+
+const normalizeAnnouncementForApi = (values) => {
+  return {
+    title: values.title?.trim() || "",
+    category: values.category,
+    priority: values.priority,
+    status: values.status,
+    published_at: values.publishedAt
+      ? values.publishedAt.format("YYYY-MM-DD HH:mm:ss")
+      : null,
+    expires_at: values.expiresAt
+      ? values.expiresAt.format("YYYY-MM-DD HH:mm:ss")
+      : null,
+    content: values.content?.trim() || "",
+  };
+};
 
 const Announcements = () => {
+  const dispatch = useDispatch();
 
-  const [announcements, setAnnouncements] =
-    useState(initialAnnouncements);
+  const announcements = useSelector(selectAnnouncements);
+  const stats = useSelector(selectAnnouncementStats);
 
-  const [modalOpen, setModalOpen] =
-    useState(false);
+  const loading = useSelector(selectAnnouncementLoading);
+  const statsLoading = useSelector(selectAnnouncementStatsLoading);
+  const mutationLoading = useSelector(selectAnnouncementMutationLoading);
 
-  const [editingAnnouncement, setEditingAnnouncement] =
-    useState(null);
+  const error = useSelector(selectAnnouncementError);
+  const statsError = useSelector(selectAnnouncementStatsError);
 
-  const [viewAnnouncement, setViewAnnouncement] =
-    useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+  const [viewAnnouncement, setViewAnnouncement] = useState(null);
 
   const [form] = Form.useForm();
 
+  useEffect(() => {
+    dispatch(fetchAnnouncements());
+    dispatch(fetchAnnouncementStats());
+  }, [dispatch]);
 
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
-
-  const totalAnnouncements =
-    announcements.length;
-
-  const publishedAnnouncements =
-    announcements.filter(
-      (item) =>
-        item.status === "Published"
-    ).length;
-
-  const draftAnnouncements =
-    announcements.filter(
-      (item) =>
-        item.status === "Draft"
-    ).length;
-
-  const highPriorityAnnouncements =
-    announcements.filter(
-      (item) =>
-        item.priority === "High" ||
-        item.priority === "Critical"
-    ).length;
-
-
-  /* =======================================================
-     CREATE
-  ======================================================= */
+  const handleRefresh = () => {
+    dispatch(fetchAnnouncements());
+    dispatch(fetchAnnouncementStats());
+  };
 
   const handleCreate = () => {
-
     setEditingAnnouncement(null);
 
     form.resetFields();
 
-    setModalOpen(true);
-  };
-
-
-  /* =======================================================
-     EDIT
-  ======================================================= */
-
-  const handleEdit = (record) => {
-
-    setEditingAnnouncement(record);
-
     form.setFieldsValue({
-      title: record.title,
-      category: record.category,
-      priority: record.priority,
-      status: record.status,
-      publishedAt: record.publishedAt
-        ? dayjs(record.publishedAt)
-        : null,
-      expiresAt: record.expiresAt
-        ? dayjs(record.expiresAt)
-        : null,
-      content: record.content,
+      category: "General",
+      priority: "Medium",
+      status: "Draft",
+      publishedAt: null,
+      expiresAt: null,
     });
 
     setModalOpen(true);
   };
 
+  const handleEdit = (announcement) => {
+    setEditingAnnouncement(announcement);
 
-  /* =======================================================
-     SAVE
-  ======================================================= */
+    form.setFieldsValue(
+      normalizeAnnouncementForForm(announcement)
+    );
+
+    setModalOpen(true);
+  };
 
   const handleSave = async () => {
-
     try {
+      const values = await form.validateFields();
 
-      const values =
-        await form.validateFields();
-
-      const announcementData = {
-
-        title: values.title,
-
-        category: values.category,
-
-        priority: values.priority,
-
-        status: values.status,
-
-        publishedAt:
-          values.publishedAt
-            ? values.publishedAt.format(
-                "YYYY-MM-DD"
-              )
-            : null,
-
-        expiresAt:
-          values.expiresAt
-            ? values.expiresAt.format(
-                "YYYY-MM-DD"
-              )
-            : null,
-
-        content: values.content,
-
-        author: "Administrator",
-      };
-
-
-      /* =================================================
-         UPDATE EXISTING
-      ================================================= */
+      const payload = normalizeAnnouncementForApi(values);
 
       if (editingAnnouncement) {
+        await dispatch(
+          updateAnnouncement({
+            id: editingAnnouncement.id,
+            announcementData: payload,
+          })
+        ).unwrap();
 
-        setAnnouncements((previous) =>
-          previous.map((item) =>
-            item.id ===
-            editingAnnouncement.id
-              ? {
-                  ...item,
-                  ...announcementData,
-                }
-              : item
-          )
-        );
+        message.success("Announcement updated successfully.");
+      } else {
+        await dispatch(
+          createAnnouncement(payload)
+        ).unwrap();
 
-        message.success(
-          "Announcement updated successfully."
-        );
-
-      }
-
-      /* =================================================
-         CREATE NEW
-      ================================================= */
-
-      else {
-
-        const newAnnouncement = {
-
-          id:
-            Date.now(),
-
-          ...announcementData,
-        };
-
-        setAnnouncements((previous) => [
-          newAnnouncement,
-          ...previous,
-        ]);
-
-        message.success(
-          "Announcement created successfully."
-        );
+        message.success("Announcement created successfully.");
       }
 
       setModalOpen(false);
-
+      setEditingAnnouncement(null);
       form.resetFields();
 
-    }
+      dispatch(fetchAnnouncements());
+      dispatch(fetchAnnouncementStats());
+    } catch (err) {
+      if (err?.errorFields) {
+        return;
+      }
 
-    catch (error) {
-
-      // Validation errors are handled by Ant Design.
-
-    }
-  };
-
-
-  /* =======================================================
-     DELETE
-  ======================================================= */
-
-  const handleDelete = (id) => {
-
-    setAnnouncements((previous) =>
-      previous.filter(
-        (item) => item.id !== id
-      )
-    );
-
-    message.success(
-      "Announcement deleted successfully."
-    );
-  };
-
-
-  /* =======================================================
-     PUBLISH / UNPUBLISH
-  ======================================================= */
-
-  const handleStatusChange = (
-    record,
-    checked
-  ) => {
-
-    const newStatus =
-      checked
-        ? "Published"
-        : "Draft";
-
-    setAnnouncements((previous) =>
-      previous.map((item) =>
-        item.id === record.id
-          ? {
-              ...item,
-              status: newStatus,
-              publishedAt:
-                checked
-                  ? dayjs().format(
-                      "YYYY-MM-DD"
-                    )
-                  : item.publishedAt,
-            }
-          : item
-      )
-    );
-
-    message.success(
-      checked
-        ? "Announcement published."
-        : "Announcement moved to draft."
-    );
-  };
-
-
-  /* =======================================================
-     STATUS TAG
-  ======================================================= */
-
-  const renderStatus = (status) => {
-
-    if (status === "Published") {
-
-      return (
-        <Tag
-          icon={<CheckCircleOutlined />}
-          color="success"
-        >
-          Published
-        </Tag>
+      message.error(
+        err?.message ||
+          err ||
+          "Failed to save announcement."
       );
     }
-
-    if (status === "Draft") {
-
-      return (
-        <Tag
-          icon={<FileTextOutlined />}
-          color="default"
-        >
-          Draft
-        </Tag>
-      );
-    }
-
-    if (status === "Archived") {
-
-      return (
-        <Tag
-          icon={<ClockCircleOutlined />}
-          color="orange"
-        >
-          Archived
-        </Tag>
-      );
-    }
-
-    return <Tag>{status}</Tag>;
   };
 
+  const handleDelete = async (id) => {
+    try {
+      await dispatch(deleteAnnouncement(id)).unwrap();
 
-  /* =======================================================
-     PRIORITY TAG
-  ======================================================= */
+      message.success("Announcement deleted successfully.");
 
-  const renderPriority = (priority) => {
-
-    const colors = {
-      Critical: "error",
-      High: "warning",
-      Medium: "blue",
-      Low: "default",
-    };
-
-    return (
-      <Tag
-        color={
-          colors[priority] ||
-          "default"
-        }
-      >
-        {priority}
-      </Tag>
-    );
+      dispatch(fetchAnnouncements());
+      dispatch(fetchAnnouncementStats());
+    } catch (err) {
+      message.error(
+        err?.message ||
+          err ||
+          "Failed to delete announcement."
+      );
+    }
   };
 
+  const handleStatusChange = async (announcement, status) => {
+    if (!announcement?.id) {
+      return;
+    }
 
-  /* =======================================================
-     TABLE COLUMNS
-  ======================================================= */
+    try {
+      await dispatch(
+        updateAnnouncementStatus({
+          id: announcement.id,
+          status,
+        })
+      ).unwrap();
 
-  const columns = [
+      message.success(
+        `Announcement status changed to ${status}.`
+      );
 
-    {
-      title: "Announcement",
-      dataIndex: "title",
-      key: "title",
+      dispatch(fetchAnnouncements());
+      dispatch(fetchAnnouncementStats());
+    } catch (err) {
+      message.error(
+        err?.message ||
+          err ||
+          "Failed to update announcement status."
+      );
+    }
+  };
 
-      render: (title, record) => (
-        <div>
+  const totalAnnouncements =
+    Number(stats?.total_announcements) ||
+    announcements.length ||
+    0;
 
-          <Text strong>
-            {title}
-          </Text>
+  const publishedAnnouncements =
+    Number(stats?.published_announcements) || 0;
 
-          <br />
+  const draftAnnouncements =
+    Number(stats?.draft_announcements) || 0;
 
-          <Text
-            type="secondary"
-            style={{
-              fontSize: 12,
-            }}
+  const highPriorityAnnouncements =
+    Number(stats?.high_priority_announcements) || 0;
+
+  const columns = useMemo(
+    () => [
+      {
+        title: "Announcement",
+        key: "announcement",
+        width: 320,
+        render: (_, record) => (
+          <Space
+            align="start"
+            size={12}
           >
-            {record.category}
-          </Text>
-
-        </div>
-      ),
-    },
-
-
-    {
-      title: "Priority",
-      dataIndex: "priority",
-      key: "priority",
-
-      render: (priority) =>
-        renderPriority(priority),
-    },
-
-
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-
-      render: (status) =>
-        renderStatus(status),
-    },
-
-
-    {
-      title: "Published",
-      dataIndex: "publishedAt",
-      key: "publishedAt",
-
-      render: (date) =>
-        date || (
-          <Text type="secondary">
-            Not published
-          </Text>
-        ),
-    },
-
-
-    {
-      title: "Author",
-      dataIndex: "author",
-      key: "author",
-    },
-
-
-    {
-      title: "Actions",
-      key: "actions",
-
-      fixed: "right",
-
-      render: (_, record) => (
-
-        <Space>
-
-          {/* VIEW */}
-
-          <Button
-            type="text"
-            icon={
-              <EyeOutlined />
-            }
-            onClick={() =>
-              setViewAnnouncement(
-                record
-              )
-            }
-          />
-
-
-          {/* EDIT */}
-
-          <Button
-            type="text"
-            icon={
-              <EditOutlined />
-            }
-            onClick={() =>
-              handleEdit(record)
-            }
-          />
-
-
-          {/* DELETE */}
-
-          <Popconfirm
-            title="Delete this announcement?"
-            description="This action cannot be undone."
-            okText="Delete"
-            cancelText="Cancel"
-            okButtonProps={{
-              danger: true,
-            }}
-            onConfirm={() =>
-              handleDelete(
-                record.id
-              )
-            }
-          >
-
-            <Button
-              danger
-              type="text"
-              icon={
-                <DeleteOutlined />
+            <Badge
+              dot={record.priority === "Critical"}
+              status={
+                record.priority === "Critical"
+                  ? "error"
+                  : record.priority === "High"
+                    ? "warning"
+                    : "default"
               }
             />
 
-          </Popconfirm>
+            <div>
+              <Text strong>
+                {record.title || "Untitled Announcement"}
+              </Text>
 
-        </Space>
-      ),
-    },
-  ];
+              <br />
 
+              <Text type="secondary">
+                {record.category || "General"}
+              </Text>
+            </div>
+          </Space>
+        ),
+      },
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+      {
+        title: "Priority",
+        dataIndex: "priority",
+        key: "priority",
+        width: 120,
+        render: (priority) => (
+          <Tag color={getPriorityColor(priority)}>
+            {priority || "Medium"}
+          </Tag>
+        ),
+      },
+
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        width: 130,
+        render: (status) => (
+          <Tag color={getStatusColor(status)}>
+            {status || "Draft"}
+          </Tag>
+        ),
+      },
+
+      {
+        title: "Published",
+        key: "published_at",
+        width: 180,
+        render: (_, record) =>
+          formatDate(
+            record.published_at ||
+              record.publishedAt
+          ),
+      },
+
+      {
+        title: "Author",
+        key: "author",
+        width: 140,
+        render: (_, record) => {
+          if (
+            record.author_name ||
+            record.authorName
+          ) {
+            return (
+              <Text>
+                {record.author_name ||
+                  record.authorName}
+              </Text>
+            );
+          }
+
+          if (record.author_id) {
+            return (
+              <Text>
+                User #{record.author_id}
+              </Text>
+            );
+          }
+
+          return (
+            <Text type="secondary">
+              Administrator
+            </Text>
+          );
+        },
+      },
+
+      {
+        title: "Actions",
+        key: "actions",
+        width: 190,
+        fixed: "right",
+        render: (_, record) => (
+          <Space size="small">
+            <Tooltip title="View">
+              <Button
+                type="text"
+                icon={<EyeOutlined />}
+                onClick={() =>
+                  setViewAnnouncement(record)
+                }
+              />
+            </Tooltip>
+
+            <Tooltip title="Edit">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() =>
+                  handleEdit(record)
+                }
+              />
+            </Tooltip>
+
+            <Popconfirm
+              title="Delete announcement?"
+              description="This action cannot be undone."
+              okText="Delete"
+              cancelText="Cancel"
+              okButtonProps={{
+                danger: true,
+              }}
+              onConfirm={() =>
+                handleDelete(record.id)
+              }
+            >
+              <Tooltip title="Delete">
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
-    <div>
-
-      {/* ===================================================
+    <div
+      style={{
+        padding: 24,
+      }}
+    >
+      {/* =====================================================
           HEADER
-      =================================================== */}
+      ===================================================== */}
 
       <div
         style={{
           display: "flex",
-          justifyContent:
-            "space-between",
+          justifyContent: "space-between",
           alignItems: "center",
+          marginBottom: 24,
           gap: 16,
           flexWrap: "wrap",
-          marginBottom: 24,
         }}
       >
-
         <div>
-
           <Title
-            level={3}
+            level={2}
             style={{
-              marginBottom: 4,
+              margin: 0,
             }}
           >
-            Announcements
+            Announcement Management
           </Title>
 
           <Text type="secondary">
-            Create, publish, edit, and manage
-            public announcements and important
-            system updates.
+            Create, manage and publish system announcements.
           </Text>
-
         </div>
 
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRefresh}
+            loading={loading || statsLoading}
+          >
+            Refresh
+          </Button>
 
-        <Button
-          type="primary"
-          icon={
-            <PlusOutlined />
-          }
-          onClick={handleCreate}
-        >
-          Create Announcement
-        </Button>
-
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            Create Announcement
+          </Button>
+        </Space>
       </div>
 
+      {/* =====================================================
+          API ERRORS
+      ===================================================== */}
 
-      {/* ===================================================
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          message="Failed to load announcements"
+          description={error}
+          style={{
+            marginBottom: 16,
+          }}
+        />
+      )}
+
+      {statsError && (
+        <Alert
+          type="warning"
+          showIcon
+          closable
+          message="Failed to load announcement statistics"
+          description={statsError}
+          style={{
+            marginBottom: 16,
+          }}
+        />
+      )}
+
+      {/* =====================================================
           STATISTICS
-      =================================================== */}
+      ===================================================== */}
 
       <Row
-        gutter={[
-          16,
-          16,
-        ]}
+        gutter={[16, 16]}
         style={{
           marginBottom: 24,
         }}
       >
-
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Total Announcements"
-              value={
-                totalAnnouncements
-              }
-              prefix={
-                <FileTextOutlined />
-              }
+              value={totalAnnouncements}
+              prefix={<BellOutlined />}
+              loading={statsLoading}
             />
-
           </Card>
-
         </Col>
-
 
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Published"
-              value={
-                publishedAnnouncements
-              }
-              prefix={
-                <CheckCircleOutlined />
-              }
+              value={publishedAnnouncements}
+              prefix={<BellOutlined />}
+              loading={statsLoading}
             />
-
           </Card>
-
         </Col>
-
 
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="Drafts"
-              value={
-                draftAnnouncements
-              }
-              prefix={
-                <FileTextOutlined />
-              }
+              value={draftAnnouncements}
+              prefix={<EditOutlined />}
+              loading={statsLoading}
             />
-
           </Card>
-
         </Col>
-
 
         <Col
           xs={24}
           sm={12}
           lg={6}
         >
-
           <Card>
-
             <Statistic
               title="High Priority"
-              value={
-                highPriorityAnnouncements
-              }
-              prefix={
-                <ExclamationCircleOutlined />
-              }
+              value={highPriorityAnnouncements}
+              prefix={<WarningOutlined />}
+              loading={statsLoading}
             />
-
           </Card>
-
         </Col>
-
       </Row>
 
+      {/* =====================================================
+          TABLE
+      ===================================================== */}
 
-      {/* ===================================================
-          ANNOUNCEMENTS TABLE
-      =================================================== */}
-
-      <Card
-        title="Announcement Management"
-      >
-
-        {announcements.length > 0 ? (
-
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={
-              announcements
-            }
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-            }}
-            scroll={{
-              x: 900,
-            }}
-          />
-
-        ) : (
-
-          <Empty
-            description="No announcements available"
-          />
-
-        )}
-
+      <Card>
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={announcements}
+          loading={loading}
+          scroll={{
+            x: 1100,
+          }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total, range) =>
+              `${range[0]}-${range[1]} of ${total} announcements`,
+          }}
+          locale={{
+            emptyText: (
+              <Empty
+                description="No announcements found"
+              />
+            ),
+          }}
+        />
       </Card>
 
-
-      {/* ===================================================
+      {/* =====================================================
           CREATE / EDIT MODAL
-      =================================================== */}
+      ===================================================== */}
 
       <Modal
         title={
@@ -779,6 +671,7 @@ const Announcements = () => {
         open={modalOpen}
         onCancel={() => {
           setModalOpen(false);
+          setEditingAnnouncement(null);
           form.resetFields();
         }}
         onOk={handleSave}
@@ -787,19 +680,17 @@ const Announcements = () => {
             ? "Update"
             : "Create"
         }
-        width={700}
+        confirmLoading={mutationLoading}
+        width={720}
         destroyOnHidden
       >
-
         <Form
           form={form}
           layout="vertical"
+          requiredMark="optional"
         >
-
-          {/* TITLE */}
-
           <Form.Item
-            label="Announcement Title"
+            label="Title"
             name="title"
             rules={[
               {
@@ -807,29 +698,25 @@ const Announcements = () => {
                 message:
                   "Please enter announcement title.",
               },
+              {
+                max: 150,
+                message:
+                  "Title cannot exceed 150 characters.",
+              },
             ]}
           >
-
             <Input
               placeholder="Enter announcement title"
               maxLength={150}
               showCount
             />
-
           </Form.Item>
 
-
-          {/* CATEGORY + PRIORITY */}
-
-          <Row
-            gutter={16}
-          >
-
+          <Row gutter={16}>
             <Col
               xs={24}
-              sm={12}
+              md={8}
             >
-
               <Form.Item
                 label="Category"
                 name="category"
@@ -841,43 +728,17 @@ const Announcements = () => {
                   },
                 ]}
               >
-
                 <Select
                   placeholder="Select category"
-                >
-
-                  <Option value="System Update">
-                    System Update
-                  </Option>
-
-                  <Option value="Weather Advisory">
-                    Weather Advisory
-                  </Option>
-
-                  <Option value="Emergency">
-                    Emergency
-                  </Option>
-
-                  <Option value="Maintenance">
-                    Maintenance
-                  </Option>
-
-                  <Option value="Public Notice">
-                    Public Notice
-                  </Option>
-
-                </Select>
-
+                  options={categoryOptions}
+                />
               </Form.Item>
-
             </Col>
-
 
             <Col
               xs={24}
-              sm={12}
+              md={8}
             >
-
               <Form.Item
                 label="Priority"
                 name="priority"
@@ -889,121 +750,78 @@ const Announcements = () => {
                   },
                 ]}
               >
-
                 <Select
                   placeholder="Select priority"
-                >
-
-                  <Option value="Critical">
-                    Critical
-                  </Option>
-
-                  <Option value="High">
-                    High
-                  </Option>
-
-                  <Option value="Medium">
-                    Medium
-                  </Option>
-
-                  <Option value="Low">
-                    Low
-                  </Option>
-
-                </Select>
-
+                  options={priorityOptions}
+                />
               </Form.Item>
-
             </Col>
-
-          </Row>
-
-
-          {/* STATUS */}
-
-          <Form.Item
-            label="Publication Status"
-            name="status"
-            rules={[
-              {
-                required: true,
-              },
-            ]}
-          >
-
-            <Select>
-
-              <Option value="Draft">
-                Draft
-              </Option>
-
-              <Option value="Published">
-                Published
-              </Option>
-
-              <Option value="Archived">
-                Archived
-              </Option>
-
-            </Select>
-
-          </Form.Item>
-
-
-          {/* DATES */}
-
-          <Row
-            gutter={16}
-          >
 
             <Col
               xs={24}
-              sm={12}
+              md={8}
             >
-
               <Form.Item
-                label="Publish Date"
+                label="Status"
+                name="status"
+                rules={[
+                  {
+                    required: true,
+                    message:
+                      "Please select status.",
+                  },
+                ]}
+              >
+                <Select
+                  placeholder="Select status"
+                  options={statusOptions}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col
+              xs={24}
+              md={12}
+            >
+              <Form.Item
+                label="Published At"
                 name="publishedAt"
               >
-
                 <DatePicker
                   style={{
                     width: "100%",
                   }}
+                  showTime
+                  format="DD MMM YYYY, hh:mm A"
+                  placeholder="Select publish date"
                 />
-
               </Form.Item>
-
             </Col>
-
 
             <Col
               xs={24}
-              sm={12}
+              md={12}
             >
-
               <Form.Item
-                label="Expiry Date"
+                label="Expires At"
                 name="expiresAt"
               >
-
                 <DatePicker
                   style={{
                     width: "100%",
                   }}
+                  showTime
+                  format="DD MMM YYYY, hh:mm A"
+                  placeholder="Select expiry date"
                 />
-
               </Form.Item>
-
             </Col>
-
           </Row>
 
-
-          {/* CONTENT */}
-
           <Form.Item
-            label="Announcement Content"
+            label="Content"
             name="content"
             rules={[
               {
@@ -1013,139 +831,144 @@ const Announcements = () => {
               },
             ]}
           >
-
             <TextArea
               rows={7}
               placeholder="Write announcement content..."
               showCount
-              maxLength={3000}
             />
-
           </Form.Item>
-
         </Form>
-
       </Modal>
 
-
-      {/* ===================================================
+      {/* =====================================================
           VIEW MODAL
-      =================================================== */}
+      ===================================================== */}
 
       <Modal
-        title="Announcement Preview"
-        open={
-          !!viewAnnouncement
-        }
-        footer={null}
+        title="Announcement Details"
+        open={Boolean(viewAnnouncement)}
         onCancel={() =>
           setViewAnnouncement(null)
         }
-        width={700}
+        footer={[
+          <Button
+            key="close"
+            onClick={() =>
+              setViewAnnouncement(null)
+            }
+          >
+            Close
+          </Button>,
+
+          viewAnnouncement && (
+            <Button
+              key="edit"
+              type="primary"
+              icon={<EditOutlined />}
+              onClick={() => {
+                handleEdit(viewAnnouncement);
+                setViewAnnouncement(null);
+              }}
+            >
+              Edit
+            </Button>
+          ),
+        ]}
+        width={760}
       >
-
         {viewAnnouncement && (
-
-          <div>
-
-            <Title
-              level={3}
-            >
-              {
-                viewAnnouncement.title
-              }
-            </Title>
-
-
-            <Space
-              wrap
+          <>
+            <Descriptions
+              bordered
+              column={{
+                xs: 1,
+                sm: 2,
+              }}
               style={{
-                marginBottom: 16,
+                marginBottom: 24,
               }}
             >
+              <Descriptions.Item label="Title">
+                {viewAnnouncement.title || "—"}
+              </Descriptions.Item>
 
-              {renderStatus(
-                viewAnnouncement.status
-              )}
+              <Descriptions.Item label="Category">
+                {viewAnnouncement.category || "—"}
+              </Descriptions.Item>
 
-              {renderPriority(
-                viewAnnouncement.priority
-              )}
+              <Descriptions.Item label="Priority">
+                <Tag
+                  color={getPriorityColor(
+                    viewAnnouncement.priority
+                  )}
+                >
+                  {viewAnnouncement.priority ||
+                    "Medium"}
+                </Tag>
+              </Descriptions.Item>
 
-              <Tag>
-                {
-                  viewAnnouncement.category
-                }
-              </Tag>
+              <Descriptions.Item label="Status">
+                <Tag
+                  color={getStatusColor(
+                    viewAnnouncement.status
+                  )}
+                >
+                  {viewAnnouncement.status ||
+                    "Draft"}
+                </Tag>
+              </Descriptions.Item>
 
-            </Space>
+              <Descriptions.Item label="Published At">
+                {formatDate(
+                  viewAnnouncement.published_at ||
+                    viewAnnouncement.publishedAt
+                )}
+              </Descriptions.Item>
 
+              <Descriptions.Item label="Expires At">
+                {formatDate(
+                  viewAnnouncement.expires_at ||
+                    viewAnnouncement.expiresAt
+                )}
+              </Descriptions.Item>
 
-            <div
-              style={{
-                marginBottom: 16,
-              }}
-            >
+              <Descriptions.Item label="Author">
+                {viewAnnouncement.author_name ||
+                viewAnnouncement.authorName
+                  ? viewAnnouncement.author_name ||
+                    viewAnnouncement.authorName
+                  : viewAnnouncement.author_id
+                    ? `User #${viewAnnouncement.author_id}`
+                    : "Administrator"}
+              </Descriptions.Item>
 
-              <Text type="secondary">
-                Published:{" "}
-              </Text>
-
-              <Text>
-                {
-                  viewAnnouncement.publishedAt ||
-                  "Not published"
-                }
-              </Text>
-
-            </div>
-
-
-            <div
-              style={{
-                marginBottom: 16,
-              }}
-            >
-
-              <Text type="secondary">
-                Expires:{" "}
-              </Text>
-
-              <Text>
-                {
-                  viewAnnouncement.expiresAt ||
-                  "No expiry date"
-                }
-              </Text>
-
-            </div>
-
+              <Descriptions.Item label="Created At">
+                {formatDate(
+                  viewAnnouncement.created_at ||
+                    viewAnnouncement.createdAt
+                )}
+              </Descriptions.Item>
+            </Descriptions>
 
             <Card
               size="small"
-              style={{
-                background:
-                  "#f5f7fa",
-              }}
+              title="Content"
             >
-
-              <Text>
-                {
-                  viewAnnouncement.content
-                }
-              </Text>
-
+              <Paragraph
+                style={{
+                  marginBottom: 0,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {viewAnnouncement.content ||
+                  "No content available."}
+              </Paragraph>
             </Card>
-
-          </div>
-
+          </>
         )}
-
       </Modal>
-
     </div>
   );
 };
-
 
 export default Announcements;

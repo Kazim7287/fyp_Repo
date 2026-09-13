@@ -6,6 +6,7 @@ import nodeReducer from "./slices/nodeSlice";
 import alertReducer from "./slices/alertSlice";
 import blogReducer from "./slices/blogSlice";
 import researchReducer from "./slices/researchSlice";
+import announcementReducer from "./slices/announcementSlice";
 
 export const store = configureStore({
   reducer: {
@@ -15,5 +16,6 @@ export const store = configureStore({
     alerts: alertReducer,
     blogs: blogReducer,
     research: researchReducer,
+    announcements: announcementReducer,
   },
 });
