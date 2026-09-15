@@ -8,6 +8,7 @@ import blogReducer from "./slices/blogSlice";
 import researchReducer from "./slices/researchSlice";
 import announcementReducer from "./slices/announcementSlice";
 import newsReducer from "./slices/newsSlice";
+import faqReducer from "./slices/faqSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -18,5 +19,6 @@ export const store = configureStore({
     research: researchReducer,
     announcements: announcementReducer,
     news: newsReducer,
+    faqs: faqReducer,
   },
 });

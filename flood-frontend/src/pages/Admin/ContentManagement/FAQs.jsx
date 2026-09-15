@@ -1,221 +1,135 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 
 import {
-  Card,
-  Typography,
+  Alert,
+  Badge,
   Button,
-  Table,
-  Tag,
-  Space,
-  Modal,
+  Card,
+  Col,
   Form,
   Input,
-  Select,
-  InputNumber,
-  Switch,
+  Modal,
   Popconfirm,
-  message,
   Row,
-  Col,
+  Select,
+  Space,
   Statistic,
-  Empty,
-  Collapse,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
 } from "antd";
 
 import {
-  PlusOutlined,
-  EditOutlined,
   DeleteOutlined,
+  EditOutlined,
   EyeOutlined,
-  CheckCircleOutlined,
-  FileTextOutlined,
+  PlusOutlined,
   QuestionCircleOutlined,
+  StarFilled,
   StarOutlined,
-  SearchOutlined,
 } from "@ant-design/icons";
 
-const { Title, Text } = Typography;
+import {
+  fetchFAQs,
+  fetchFAQStats,
+  addFAQ,
+  editFAQ,
+  removeFAQ,
+  changeFAQStatus,
+  changeFAQFeatured,
+  selectFAQs,
+  selectFAQStats,
+  selectFAQLoading,
+  selectFAQStatsLoading,
+  selectFAQActionLoading,
+  selectFAQError,
+} from "../../../store/slices/faqSlice";
 
+const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
-const { Option } = Select;
+// =========================================================
+// CONSTANTS
+// =========================================================
 
-
-/* =========================================================
-   SAMPLE FAQ DATA
-========================================================= */
-
-const initialFAQs = [
-  {
-    id: 1,
-
-    question:
-      "What is the FloodGuard Early Warning System?",
-
-    answer:
-      "FloodGuard is an IoT and AI-based flood early-warning platform that collects real-time environmental data and provides flood-risk forecasts and alerts.",
-
-    category: "General",
-
-    status: "Published",
-
-    featured: true,
-
-    order: 1,
-  },
-
-  {
-    id: 2,
-
-    question:
-      "How does the system monitor water levels?",
-
-    answer:
-      "Monitoring stations equipped with water-level sensors continuously collect measurements and transmit them to the central monitoring platform.",
-
-    category: "Monitoring",
-
-    status: "Published",
-
-    featured: true,
-
-    order: 2,
-  },
-
-  {
-    id: 3,
-
-    question:
-      "How are flood predictions generated?",
-
-    answer:
-      "The system processes current sensor readings, historical observations, rainfall and environmental data through AI models such as LSTM, Random Forest and XGBoost.",
-
-    category: "AI & Forecasting",
-
-    status: "Published",
-
-    featured: false,
-
-    order: 3,
-  },
-
-  {
-    id: 4,
-
-    question:
-      "What should I do when a critical flood alert is issued?",
-
-    answer:
-      "Follow official emergency instructions, move to a safe location if evacuation is advised, avoid flooded roads and remain updated through official communication channels.",
-
-    category: "Emergency",
-
-    status: "Draft",
-
-    featured: false,
-
-    order: 4,
-  },
+const categories = [
+  "General",
+  "Monitoring",
+  "AI & Forecasting",
+  "Emergency",
+  "Sensors",
+  "Alerts",
 ];
 
+// =========================================================
+// COMPONENT
+// =========================================================
 
-/* =========================================================
-   COMPONENT
-========================================================= */
+const FAQManagement = () => {
+  const dispatch = useDispatch();
 
-const FAQs = () => {
+  const faqs = useSelector(selectFAQs);
+  const stats = useSelector(selectFAQStats);
+  const loading = useSelector(selectFAQLoading);
+  const statsLoading = useSelector(selectFAQStatsLoading);
+  const actionLoading = useSelector(selectFAQActionLoading);
+  const error = useSelector(selectFAQError);
 
-  const [faqs, setFaqs] =
-    useState(initialFAQs);
+  const [messageApi, contextHolder] = message.useMessage();
 
-  const [modalOpen, setModalOpen] =
-    useState(false);
+  // =======================================================
+  // LOCAL UI STATE
+  // =======================================================
 
-  const [editingFAQ, setEditingFAQ] =
-    useState(null);
+  const [searchText, setSearchText] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
-  const [viewFAQ, setViewFAQ] =
-    useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingFAQ, setEditingFAQ] = useState(null);
 
-  const [searchText, setSearchText] =
-    useState("");
-
-  const [categoryFilter, setCategoryFilter] =
-    useState("all");
+  const [previewFAQ, setPreviewFAQ] = useState(null);
 
   const [form] = Form.useForm();
 
+  // =======================================================
+  // INITIAL DATA
+  // =======================================================
 
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
+  useEffect(() => {
+    dispatch(fetchFAQs());
+    dispatch(fetchFAQStats());
+  }, [dispatch]);
 
-  const totalFAQs =
-    faqs.length;
-
-  const publishedFAQs =
-    faqs.filter(
-      (item) =>
-        item.status === "Published"
-    ).length;
-
-  const draftFAQs =
-    faqs.filter(
-      (item) =>
-        item.status === "Draft"
-    ).length;
-
-  const featuredFAQs =
-    faqs.filter(
-      (item) =>
-        item.featured
-    ).length;
-
-
-  /* =======================================================
-     FILTER DATA
-  ======================================================= */
+  // =======================================================
+  // CLIENT-SIDE FILTERING
+  // =======================================================
 
   const filteredFAQs = useMemo(() => {
+    const search = searchText.trim().toLowerCase();
 
-    return faqs.filter((item) => {
-
+    return faqs.filter((faq) => {
       const matchesSearch =
-        item.question
-          .toLowerCase()
-          .includes(
-            searchText.toLowerCase()
-          ) ||
-        item.answer
-          .toLowerCase()
-          .includes(
-            searchText.toLowerCase()
-          );
+        !search ||
+        faq.question?.toLowerCase().includes(search) ||
+        faq.answer?.toLowerCase().includes(search);
 
       const matchesCategory =
         categoryFilter === "all" ||
-        item.category === categoryFilter;
+        faq.category === categoryFilter;
 
-      return (
-        matchesSearch &&
-        matchesCategory
-      );
+      return matchesSearch && matchesCategory;
     });
+  }, [faqs, searchText, categoryFilter]);
 
-  }, [
-    faqs,
-    searchText,
-    categoryFilter,
-  ]);
-
-
-  /* =======================================================
-     CREATE
-  ======================================================= */
+  // =======================================================
+  // OPEN CREATE MODAL
+  // =======================================================
 
   const handleCreate = () => {
-
     setEditingFAQ(null);
 
     form.resetFields();
@@ -223,285 +137,209 @@ const FAQs = () => {
     form.setFieldsValue({
       status: "Draft",
       featured: false,
-      order: faqs.length + 1,
+      display_order: faqs.length + 1,
     });
 
-    setModalOpen(true);
+    setIsModalOpen(true);
   };
 
+  // =======================================================
+  // OPEN EDIT MODAL
+  // =======================================================
 
-  /* =======================================================
-     EDIT
-  ======================================================= */
-
-  const handleEdit = (record) => {
-
-    setEditingFAQ(record);
+  const handleEdit = (faq) => {
+    setEditingFAQ(faq);
 
     form.setFieldsValue({
-      question: record.question,
-      answer: record.answer,
-      category: record.category,
-      status: record.status,
-      featured: record.featured,
-      order: record.order,
+      question: faq.question,
+      answer: faq.answer,
+      category: faq.category,
+      status: faq.status,
+      featured: faq.featured,
+      display_order: faq.display_order,
     });
 
-    setModalOpen(true);
+    setIsModalOpen(true);
   };
 
+  // =======================================================
+  // CLOSE MODAL
+  // =======================================================
 
-  /* =======================================================
-     SAVE
-  ======================================================= */
+  const handleCancel = () => {
+    if (actionLoading) return;
 
-  const handleSave = async () => {
+    setIsModalOpen(false);
+    setEditingFAQ(null);
+    form.resetFields();
+  };
 
+  // =======================================================
+  // SUBMIT FORM
+  // =======================================================
+
+  const handleSubmit = async () => {
     try {
-
-      const values =
-        await form.validateFields();
-
+      const values = await form.validateFields();
 
       const faqData = {
-
-        question:
-          values.question,
-
-        answer:
-          values.answer,
-
-        category:
-          values.category,
-
-        status:
-          values.status,
-
-        featured:
-          values.featured || false,
-
-        order:
-          values.order || 1,
+        question: values.question.trim(),
+        answer: values.answer.trim(),
+        category: values.category,
+        status: values.status,
+        featured: Boolean(values.featured),
+        display_order: Number(values.display_order),
       };
 
-
-      /* =================================================
-         UPDATE
-      ================================================= */
-
       if (editingFAQ) {
+        await dispatch(
+          editFAQ({
+            id: editingFAQ.id,
+            faqData,
+          })
+        ).unwrap();
 
-        setFaqs((previous) =>
-          previous.map((item) =>
-            item.id ===
-            editingFAQ.id
-              ? {
-                  ...item,
-                  ...faqData,
-                }
-              : item
-          )
-        );
+        messageApi.success("FAQ updated successfully.");
+      } else {
+        await dispatch(addFAQ(faqData)).unwrap();
 
-        message.success(
-          "FAQ updated successfully."
-        );
-
+        messageApi.success("FAQ created successfully.");
       }
 
-
-      /* =================================================
-         CREATE
-      ================================================= */
-
-      else {
-
-        const newFAQ = {
-
-          id: Date.now(),
-
-          ...faqData,
-        };
-
-        setFaqs((previous) => [
-          ...previous,
-          newFAQ,
-        ]);
-
-        message.success(
-          "FAQ created successfully."
-        );
-      }
-
-
-      setModalOpen(false);
-
+      setIsModalOpen(false);
+      setEditingFAQ(null);
       form.resetFields();
 
-    }
+      dispatch(fetchFAQs());
+      dispatch(fetchFAQStats());
+    } catch (error) {
+      if (error?.errorFields) {
+        return;
+      }
 
-    catch (error) {
-
-      // Ant Design handles validation errors.
-
-    }
-  };
-
-
-  /* =======================================================
-     DELETE
-  ======================================================= */
-
-  const handleDelete = (id) => {
-
-    setFaqs((previous) =>
-      previous.filter(
-        (item) =>
-          item.id !== id
-      )
-    );
-
-    message.success(
-      "FAQ deleted successfully."
-    );
-  };
-
-
-  /* =======================================================
-     STATUS
-  ======================================================= */
-
-  const handleStatusChange = (
-    record,
-    checked
-  ) => {
-
-    const newStatus =
-      checked
-        ? "Published"
-        : "Draft";
-
-
-    setFaqs((previous) =>
-      previous.map((item) =>
-        item.id === record.id
-          ? {
-              ...item,
-              status: newStatus,
-            }
-          : item
-      )
-    );
-
-
-    message.success(
-      checked
-        ? "FAQ published."
-        : "FAQ moved to draft."
-    );
-  };
-
-
-  /* =======================================================
-     FEATURED
-  ======================================================= */
-
-  const handleFeaturedChange = (
-    record,
-    checked
-  ) => {
-
-    setFaqs((previous) =>
-      previous.map((item) =>
-        item.id === record.id
-          ? {
-              ...item,
-              featured: checked,
-            }
-          : item
-      )
-    );
-  };
-
-
-  /* =======================================================
-     STATUS TAG
-  ======================================================= */
-
-  const renderStatus = (status) => {
-
-    if (status === "Published") {
-
-      return (
-        <Tag
-          icon={
-            <CheckCircleOutlined />
-          }
-          color="success"
-        >
-          Published
-        </Tag>
+      messageApi.error(
+        typeof error === "string"
+          ? error
+          : "Failed to save FAQ."
       );
     }
-
-
-    return (
-      <Tag
-        icon={
-          <FileTextOutlined />
-        }
-      >
-        Draft
-      </Tag>
-    );
   };
 
+  // =======================================================
+  // DELETE FAQ
+  // =======================================================
 
-  /* =======================================================
-     TABLE COLUMNS
-  ======================================================= */
+  const handleDelete = async (id) => {
+    try {
+      await dispatch(removeFAQ(id)).unwrap();
+
+      messageApi.success("FAQ deleted successfully.");
+
+      dispatch(fetchFAQStats());
+    } catch (error) {
+      messageApi.error(
+        typeof error === "string"
+          ? error
+          : "Failed to delete FAQ."
+      );
+    }
+  };
+
+  // =======================================================
+  // STATUS CHANGE
+  // =======================================================
+
+  const handleStatusChange = async (faq, checked) => {
+    const newStatus = checked ? "Published" : "Draft";
+
+    try {
+      await dispatch(
+        changeFAQStatus({
+          id: faq.id,
+          status: newStatus,
+        })
+      ).unwrap();
+
+      messageApi.success(
+        `FAQ ${newStatus.toLowerCase()} successfully.`
+      );
+
+      dispatch(fetchFAQStats());
+    } catch (error) {
+      messageApi.error(
+        typeof error === "string"
+          ? error
+          : "Failed to update FAQ status."
+      );
+    }
+  };
+
+  // =======================================================
+  // FEATURED CHANGE
+  // =======================================================
+
+  const handleFeaturedChange = async (faq, checked) => {
+    try {
+      await dispatch(
+        changeFAQFeatured({
+          id: faq.id,
+          featured: checked,
+        })
+      ).unwrap();
+
+      messageApi.success(
+        checked
+          ? "FAQ marked as featured."
+          : "FAQ removed from featured."
+      );
+
+      dispatch(fetchFAQStats());
+    } catch (error) {
+      messageApi.error(
+        typeof error === "string"
+          ? error
+          : "Failed to update featured status."
+      );
+    }
+  };
+
+  // =======================================================
+  // TABLE COLUMNS
+  // =======================================================
 
   const columns = [
-
     {
       title: "#",
-      dataIndex: "order",
-      key: "order",
+      dataIndex: "display_order",
+      key: "display_order",
       width: 70,
-
       sorter: (a, b) =>
-        a.order - b.order,
+        Number(a.display_order) -
+        Number(b.display_order),
     },
-
 
     {
       title: "Question",
       dataIndex: "question",
       key: "question",
+      width: 320,
 
       render: (question) => (
-
         <Space align="start">
-
-          <QuestionCircleOutlined
-            style={{
-              marginTop: 4,
-            }}
-          />
+          <QuestionCircleOutlined />
 
           <Text strong>
             {question}
           </Text>
-
         </Space>
       ),
     },
-
 
     {
       title: "Category",
       dataIndex: "category",
       key: "category",
+      width: 160,
 
       render: (category) => (
         <Tag color="blue">
@@ -510,672 +348,556 @@ const FAQs = () => {
       ),
     },
 
-
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
+      width: 150,
 
-      render: (status) =>
-        renderStatus(status),
+      render: (_, record) => (
+        <Space>
+          <Switch
+            size="small"
+            checked={record.status === "Published"}
+            loading={actionLoading}
+            onChange={(checked) =>
+              handleStatusChange(record, checked)
+            }
+          />
+
+          <Badge
+            status={
+              record.status === "Published"
+                ? "success"
+                : "default"
+            }
+            text={record.status}
+          />
+        </Space>
+      ),
     },
-
 
     {
       title: "Featured",
       dataIndex: "featured",
       key: "featured",
+      width: 120,
 
-      render: (featured, record) => (
-
-        <Switch
-          size="small"
-          checked={featured}
-          checkedChildren={
-            <StarOutlined />
+      render: (_, record) => (
+        <Tooltip
+          title={
+            record.featured
+              ? "Remove featured"
+              : "Mark as featured"
           }
-          onChange={(checked) =>
-            handleFeaturedChange(
-              record,
-              checked
-            )
-          }
-        />
-
+        >
+          <Button
+            type="text"
+            loading={actionLoading}
+            icon={
+              record.featured ? (
+                <StarFilled />
+              ) : (
+                <StarOutlined />
+              )
+            }
+            onClick={() =>
+              handleFeaturedChange(
+                record,
+                !record.featured
+              )
+            }
+          />
+        </Tooltip>
       ),
     },
-
 
     {
       title: "Actions",
       key: "actions",
-
-      fixed: "right",
+      width: 160,
 
       render: (_, record) => (
-
         <Space>
+          <Tooltip title="Preview">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={() =>
+                setPreviewFAQ(record)
+              }
+            />
+          </Tooltip>
 
-          {/* VIEW */}
-
-          <Button
-            type="text"
-            icon={
-              <EyeOutlined />
-            }
-            onClick={() =>
-              setViewFAQ(record)
-            }
-          />
-
-
-          {/* EDIT */}
-
-          <Button
-            type="text"
-            icon={
-              <EditOutlined />
-            }
-            onClick={() =>
-              handleEdit(record)
-            }
-          />
-
-
-          {/* DELETE */}
+          <Tooltip title="Edit">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() =>
+                handleEdit(record)
+              }
+            />
+          </Tooltip>
 
           <Popconfirm
-            title="Delete this FAQ?"
-            description="This action cannot be undone."
+            title="Delete FAQ"
+            description="Are you sure you want to delete this FAQ?"
             okText="Delete"
             cancelText="Cancel"
             okButtonProps={{
               danger: true,
             }}
             onConfirm={() =>
-              handleDelete(
-                record.id
-              )
+              handleDelete(record.id)
             }
           >
-
-            <Button
-              danger
-              type="text"
-              icon={
-                <DeleteOutlined />
-              }
-            />
-
+            <Tooltip title="Delete">
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Tooltip>
           </Popconfirm>
-
         </Space>
       ),
     },
   ];
 
-
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  // =======================================================
+  // RENDER
+  // =======================================================
 
   return (
-    <div>
-
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+    <>
+      {contextHolder}
 
       <div
         style={{
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          gap: 16,
-          flexWrap: "wrap",
-          marginBottom: 24,
+          padding: 24,
         }}
       >
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
-        <div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 24,
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <Title
+              level={2}
+              style={{
+                marginBottom: 4,
+              }}
+            >
+              FAQ Management
+            </Title>
 
-          <Title
-            level={3}
-            style={{
-              marginBottom: 4,
-            }}
+            <Text type="secondary">
+              Manage frequently asked questions,
+              categories, publishing status and
+              featured FAQs.
+            </Text>
+          </div>
+
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
           >
-            FAQs Management
-          </Title>
-
-          <Text type="secondary">
-            Create, edit, organize, and
-            publish frequently asked questions.
-          </Text>
-
+            Add FAQ
+          </Button>
         </div>
 
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
-        <Button
-          type="primary"
-          icon={
-            <PlusOutlined />
-          }
-          onClick={handleCreate}
-        >
-          Create FAQ
-        </Button>
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            closable
+            message={error}
+            style={{
+              marginBottom: 24,
+            }}
+          />
+        )}
 
-      </div>
-
-
-      {/* ===================================================
-          STATISTICS
-      =================================================== */}
-
-      <Row
-        gutter={[
-          16,
-          16,
-        ]}
-        style={{
-          marginBottom: 24,
-        }}
-      >
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-
-          <Card>
-
-            <Statistic
-              title="Total FAQs"
-              value={totalFAQs}
-              prefix={
-                <QuestionCircleOutlined />
-              }
-            />
-
-          </Card>
-
-        </Col>
-
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-
-          <Card>
-
-            <Statistic
-              title="Published"
-              value={publishedFAQs}
-              prefix={
-                <CheckCircleOutlined />
-              }
-            />
-
-          </Card>
-
-        </Col>
-
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-
-          <Card>
-
-            <Statistic
-              title="Drafts"
-              value={draftFAQs}
-              prefix={
-                <FileTextOutlined />
-              }
-            />
-
-          </Card>
-
-        </Col>
-
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-
-          <Card>
-
-            <Statistic
-              title="Featured"
-              value={featuredFAQs}
-              prefix={
-                <StarOutlined />
-              }
-            />
-
-          </Card>
-
-        </Col>
-
-      </Row>
-
-
-      {/* ===================================================
-          FILTERS
-      =================================================== */}
-
-      <Card
-        style={{
-          marginBottom: 16,
-        }}
-      >
+        {/* =================================================
+            STATISTICS
+        ================================================= */}
 
         <Row
           gutter={[
             16,
             16,
           ]}
+          style={{
+            marginBottom: 24,
+          }}
         >
-
-          <Col
-            xs={24}
-            md={16}
-          >
-
-            <Input
-              allowClear
-              prefix={
-                <SearchOutlined />
-              }
-              placeholder="Search questions or answers..."
-              value={searchText}
-              onChange={(event) =>
-                setSearchText(
-                  event.target.value
-                )
-              }
-            />
-
+          <Col xs={24} sm={12} lg={6}>
+            <Card loading={statsLoading}>
+              <Statistic
+                title="Total FAQs"
+                value={stats.total_faqs}
+              />
+            </Card>
           </Col>
 
-
-          <Col
-            xs={24}
-            md={8}
-          >
-
-            <Select
-              style={{
-                width: "100%",
-              }}
-              value={categoryFilter}
-              onChange={
-                setCategoryFilter
-              }
-            >
-
-              <Option value="all">
-                All Categories
-              </Option>
-
-              <Option value="General">
-                General
-              </Option>
-
-              <Option value="Monitoring">
-                Monitoring
-              </Option>
-
-              <Option value="AI & Forecasting">
-                AI & Forecasting
-              </Option>
-
-              <Option value="Emergency">
-                Emergency
-              </Option>
-
-            </Select>
-
+          <Col xs={24} sm={12} lg={6}>
+            <Card loading={statsLoading}>
+              <Statistic
+                title="Published"
+                value={stats.published_faqs}
+              />
+            </Card>
           </Col>
 
+          <Col xs={24} sm={12} lg={6}>
+            <Card loading={statsLoading}>
+              <Statistic
+                title="Drafts"
+                value={stats.draft_faqs}
+              />
+            </Card>
+          </Col>
+
+          <Col xs={24} sm={12} lg={6}>
+            <Card loading={statsLoading}>
+              <Statistic
+                title="Featured"
+                value={stats.featured_faqs}
+              />
+            </Card>
+          </Col>
         </Row>
 
-      </Card>
+        {/* =================================================
+            FILTERS
+        ================================================= */}
 
+        <Card
+          style={{
+            marginBottom: 24,
+          }}
+        >
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={16}>
+              <Input
+                allowClear
+                size="large"
+                placeholder="Search questions and answers..."
+                value={searchText}
+                onChange={(event) =>
+                  setSearchText(
+                    event.target.value
+                  )
+                }
+              />
+            </Col>
 
-      {/* ===================================================
-          FAQ TABLE
-      =================================================== */}
+            <Col xs={24} md={8}>
+              <Select
+                size="large"
+                style={{
+                  width: "100%",
+                }}
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                options={[
+                  {
+                    label: "All Categories",
+                    value: "all",
+                  },
+                  ...categories.map(
+                    (category) => ({
+                      label: category,
+                      value: category,
+                    })
+                  ),
+                ]}
+              />
+            </Col>
+          </Row>
+        </Card>
 
-      <Card
-        title="FAQ Management"
-      >
+        {/* =================================================
+            TABLE
+        ================================================= */}
 
-        {filteredFAQs.length > 0 ? (
-
+        <Card>
           <Table
             rowKey="id"
             columns={columns}
-            dataSource={
-              filteredFAQs
-            }
+            dataSource={filteredFAQs}
+            loading={loading}
+            scroll={{
+              x: 1000,
+            }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
+              showTotal: (total) =>
+                `Total ${total} FAQs`,
             }}
-            scroll={{
-              x: 950,
+            locale={{
+              emptyText:
+                searchText ||
+                categoryFilter !== "all"
+                  ? "No FAQs match your filters."
+                  : "No FAQs found.",
             }}
           />
+        </Card>
 
-        ) : (
+        {/* =================================================
+            CREATE / EDIT MODAL
+        ================================================= */}
 
-          <Empty
-            description="No FAQs found"
-          />
-
-        )}
-
-      </Card>
-
-
-      {/* ===================================================
-          CREATE / EDIT MODAL
-      =================================================== */}
-
-      <Modal
-        title={
-          editingFAQ
-            ? "Edit FAQ"
-            : "Create FAQ"
-        }
-        open={modalOpen}
-        onCancel={() => {
-
-          setModalOpen(false);
-
-          form.resetFields();
-
-        }}
-        onOk={handleSave}
-        okText={
-          editingFAQ
-            ? "Update"
-            : "Create"
-        }
-        width={700}
-        destroyOnHidden
-      >
-
-        <Form
-          form={form}
-          layout="vertical"
+        <Modal
+          title={
+            editingFAQ
+              ? "Edit FAQ"
+              : "Create FAQ"
+          }
+          open={isModalOpen}
+          onCancel={handleCancel}
+          onOk={handleSubmit}
+          okText={
+            editingFAQ
+              ? "Update FAQ"
+              : "Create FAQ"
+          }
+          confirmLoading={actionLoading}
+          width={700}
+          destroyOnClose
         >
-
-          {/* QUESTION */}
-
-          <Form.Item
-            label="Question"
-            name="question"
-            rules={[
-              {
-                required: true,
-                message:
-                  "Please enter the question.",
-              },
-            ]}
+          <Form
+            form={form}
+            layout="vertical"
           >
-
-            <Input
-              placeholder="Enter frequently asked question"
-              maxLength={300}
-              showCount
-            />
-
-          </Form.Item>
-
-
-          {/* ANSWER */}
-
-          <Form.Item
-            label="Answer"
-            name="answer"
-            rules={[
-              {
-                required: true,
-                message:
-                  "Please enter the answer.",
-              },
-            ]}
-          >
-
-            <TextArea
-              rows={7}
-              placeholder="Enter the answer..."
-              maxLength={3000}
-              showCount
-            />
-
-          </Form.Item>
-
-
-          {/* CATEGORY */}
-
-          <Form.Item
-            label="Category"
-            name="category"
-            rules={[
-              {
-                required: true,
-                message:
-                  "Please select a category.",
-              },
-            ]}
-          >
-
-            <Select
-              placeholder="Select category"
-            >
-
-              <Option value="General">
-                General
-              </Option>
-
-              <Option value="Monitoring">
-                Monitoring
-              </Option>
-
-              <Option value="AI & Forecasting">
-                AI & Forecasting
-              </Option>
-
-              <Option value="Emergency">
-                Emergency
-              </Option>
-
-              <Option value="Sensors">
-                Sensors
-              </Option>
-
-              <Option value="Alerts">
-                Alerts
-              </Option>
-
-            </Select>
-
-          </Form.Item>
-
-
-          {/* STATUS + ORDER */}
-
-          <Row
-            gutter={16}
-          >
-
-            <Col
-              xs={24}
-              sm={12}
-            >
-
-              <Form.Item
-                label="Status"
-                name="status"
-                rules={[
-                  {
-                    required: true,
-                  },
-                ]}
-              >
-
-                <Select>
-
-                  <Option value="Draft">
-                    Draft
-                  </Option>
-
-                  <Option value="Published">
-                    Published
-                  </Option>
-
-                </Select>
-
-              </Form.Item>
-
-            </Col>
-
-
-            <Col
-              xs={24}
-              sm={12}
-            >
-
-              <Form.Item
-                label="Display Order"
-                name="order"
-              >
-
-                <InputNumber
-                  min={1}
-                  style={{
-                    width: "100%",
-                  }}
-                />
-
-              </Form.Item>
-
-            </Col>
-
-          </Row>
-
-
-          {/* FEATURED */}
-
-          <Form.Item
-            label="Featured FAQ"
-            name="featured"
-            valuePropName="checked"
-          >
-
-            <Switch />
-
-          </Form.Item>
-
-        </Form>
-
-      </Modal>
-
-
-      {/* ===================================================
-          VIEW / PREVIEW MODAL
-      =================================================== */}
-
-      <Modal
-        title="FAQ Preview"
-        open={!!viewFAQ}
-        footer={null}
-        onCancel={() =>
-          setViewFAQ(null)
-        }
-        width={750}
-      >
-
-        {viewFAQ && (
-
-          <div>
-
-            <Space
-              wrap
-              style={{
-                marginBottom: 16,
-              }}
-            >
-
-              <Tag color="blue">
-                {viewFAQ.category}
-              </Tag>
-
-              {renderStatus(
-                viewFAQ.status
-              )}
-
-              {viewFAQ.featured && (
-
-                <Tag
-                  icon={
-                    <StarOutlined />
-                  }
-                  color="gold"
-                >
-                  Featured
-                </Tag>
-
-              )}
-
-            </Space>
-
-
-            <Collapse
-              defaultActiveKey={[
-                "1",
-              ]}
-              items={[
+            <Form.Item
+              label="Question"
+              name="question"
+              rules={[
                 {
-                  key: "1",
-
-                  label: (
-                    <Text strong>
-                      {viewFAQ.question}
-                    </Text>
-                  ),
-
-                  children: (
-                    <Text>
-                      {viewFAQ.answer}
-                    </Text>
-                  ),
+                  required: true,
+                  message:
+                    "Please enter the question.",
+                },
+                {
+                  max: 300,
+                  message:
+                    "Question cannot exceed 300 characters.",
                 },
               ]}
-            />
+            >
+              <Input
+                showCount
+                maxLength={300}
+                placeholder="Enter FAQ question"
+              />
+            </Form.Item>
 
-          </div>
+            <Form.Item
+              label="Answer"
+              name="answer"
+              rules={[
+                {
+                  required: true,
+                  message:
+                    "Please enter the answer.",
+                },
+                {
+                  max: 3000,
+                  message:
+                    "Answer cannot exceed 3000 characters.",
+                },
+              ]}
+            >
+              <TextArea
+                showCount
+                maxLength={3000}
+                rows={7}
+                placeholder="Enter FAQ answer"
+              />
+            </Form.Item>
 
-        )}
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  label="Category"
+                  name="category"
+                  rules={[
+                    {
+                      required: true,
+                      message:
+                        "Please select a category.",
+                    },
+                  ]}
+                >
+                  <Select
+                    placeholder="Select category"
+                    options={categories.map(
+                      (category) => ({
+                        label: category,
+                        value: category,
+                      })
+                    )}
+                  />
+                </Form.Item>
+              </Col>
 
-      </Modal>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  label="Status"
+                  name="status"
+                  rules={[
+                    {
+                      required: true,
+                      message:
+                        "Please select a status.",
+                    },
+                  ]}
+                >
+                  <Select
+                    options={[
+                      {
+                        label: "Published",
+                        value: "Published",
+                      },
+                      {
+                        label: "Draft",
+                        value: "Draft",
+                      },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
 
-    </div>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  label="Display Order"
+                  name="display_order"
+                  rules={[
+                    {
+                      required: true,
+                      message:
+                        "Please enter display order.",
+                    },
+                    {
+                      type: "number",
+                      min: 1,
+                      message:
+                        "Display order must be at least 1.",
+                    },
+                  ]}
+                >
+                  <Input
+                    type="number"
+                    min={1}
+                  />
+                </Form.Item>
+              </Col>
+
+              <Col xs={24} md={12}>
+                <Form.Item
+                  label="Featured"
+                  name="featured"
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        </Modal>
+
+        {/* =================================================
+            PREVIEW MODAL
+        ================================================= */}
+
+        <Modal
+          title="FAQ Preview"
+          open={Boolean(previewFAQ)}
+          onCancel={() =>
+            setPreviewFAQ(null)
+          }
+          footer={[
+            <Button
+              key="close"
+              onClick={() =>
+                setPreviewFAQ(null)
+              }
+            >
+              Close
+            </Button>,
+          ]}
+          width={700}
+        >
+          {previewFAQ && (
+            <>
+              <Space
+                wrap
+                style={{
+                  marginBottom: 16,
+                }}
+              >
+                <Tag color="blue">
+                  {previewFAQ.category}
+                </Tag>
+
+                <Tag
+                  color={
+                    previewFAQ.status ===
+                    "Published"
+                      ? "green"
+                      : "default"
+                  }
+                >
+                  {previewFAQ.status}
+                </Tag>
+
+                {previewFAQ.featured && (
+                  <Tag
+                    icon={<StarFilled />}
+                    color="gold"
+                  >
+                    Featured
+                  </Tag>
+                )}
+              </Space>
+
+              <Title level={4}>
+                {previewFAQ.question}
+              </Title>
+
+              <Paragraph
+                style={{
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {previewFAQ.answer}
+              </Paragraph>
+            </>
+          )}
+        </Modal>
+      </div>
+    </>
   );
 };
 
-
-export default FAQs;
+export default FAQManagement;
