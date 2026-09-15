@@ -19,35 +19,45 @@ const sensorRoutes = require("./routes/sensor.routes");
 const componentRoutes = require("./routes/component.routes");
 const nodeRoutes = require("./routes/nodeRoutes");
 
-// ---------------------------------------------------------
+// =========================================================
 // ALERT ROUTES
-// ---------------------------------------------------------
+// =========================================================
 
 const alertRoutes = require("./routes/alertRoutes");
 
-// ---------------------------------------------------------
+// =========================================================
 // BLOG ROUTES
-// ---------------------------------------------------------
+// =========================================================
 
 const blogRoutes = require("./routes/blog.routes");
 
-// ---------------------------------------------------------
+// =========================================================
 // RESEARCH ROUTES
-// ---------------------------------------------------------
+// =========================================================
 
 const researchRoutes = require("./routes/research.routes");
 
-// ---------------------------------------------------------
+// =========================================================
 // ANNOUNCEMENT ROUTES
-// ---------------------------------------------------------
+// =========================================================
 
 const announcementRoutes = require("./routes/announcement.routes");
 
-// ---------------------------------------------------------
+// =========================================================
 // NEWS ROUTES
-// ---------------------------------------------------------
+// =========================================================
 
 const newsRoutes = require("./routes/news.routes");
+
+// =========================================================
+// FAQ ROUTES
+// =========================================================
+
+const faqRoutes = require("./routes/faq.routes");
+
+// =========================================================
+// EXPRESS APP
+// =========================================================
 
 const app = express();
 
@@ -78,7 +88,8 @@ const allowedOrigins = [
 // ---------------------------------------------------------
 
 if (process.env.FRONTEND_URL) {
-  const frontendUrl = process.env.FRONTEND_URL.trim();
+  const frontendUrl =
+    process.env.FRONTEND_URL.trim();
 
   if (
     frontendUrl &&
@@ -97,7 +108,7 @@ app.use(
     origin: (origin, callback) => {
       // ---------------------------------------------------
       // Requests without Origin
-      // curl, Postman, server-to-server, etc.
+      // Postman, curl, server-to-server, etc.
       // ---------------------------------------------------
 
       if (!origin) {
@@ -188,9 +199,10 @@ app.use(
 // =========================================================
 
 app.get("/", (req, res) => {
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
-    message: "Flood Forecasting API is running",
+    message:
+      "Flood Forecasting API is running",
   });
 });
 
@@ -204,9 +216,10 @@ app.get("/db-test", async (req, res) => {
       "SELECT NOW() AS current_time"
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "PostgreSQL connected successfully",
+      message:
+        "PostgreSQL connected successfully",
       time: result.rows[0].current_time,
     });
   } catch (error) {
@@ -215,14 +228,15 @@ app.get("/db-test", async (req, res) => {
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "PostgreSQL connection failed",
+      message:
+        "PostgreSQL connection failed",
 
-      error:
-        process.env.NODE_ENV === "production"
-          ? undefined
-          : error.message,
+      ...(process.env.NODE_ENV !==
+        "production" && {
+        error: error.message,
+      }),
     });
   }
 });
@@ -406,11 +420,31 @@ app.use(
 );
 
 // =========================================================
+// FAQ MANAGEMENT ROUTES
+// =========================================================
+//
+// GET    /api/faqs
+// GET    /api/faqs/stats
+// GET    /api/faqs/:id
+// POST   /api/faqs
+// PUT    /api/faqs/:id
+// DELETE /api/faqs/:id
+// PATCH  /api/faqs/:id/status
+// PATCH  /api/faqs/:id/featured
+//
+// =========================================================
+
+app.use(
+  "/api/faqs",
+  faqRoutes
+);
+
+// =========================================================
 // 404 HANDLER
 // =========================================================
 
 app.use((req, res) => {
-  res.status(404).json({
+  return res.status(404).json({
     success: false,
 
     message:
@@ -460,8 +494,12 @@ app.use(
         err.message ||
         "Internal server error",
 
-      // Do not expose internal errors in production
-      ...(process.env.NODE_ENV !== "production" && {
+      // ---------------------------------------------------
+      // Never expose stack traces in production
+      // ---------------------------------------------------
+
+      ...(process.env.NODE_ENV !==
+        "production" && {
         stack: err.stack,
       }),
     });
