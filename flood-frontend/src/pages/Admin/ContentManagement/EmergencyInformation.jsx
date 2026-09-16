@@ -1,799 +1,610 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 
 import {
+  Alert,
   Card,
   Col,
+  Empty,
+  List,
   Row,
-  Typography,
-  Button,
-  Table,
+  Spin,
   Tag,
-  Space,
-  Modal,
-  Form,
-  Input,
-  Select,
-  Popconfirm,
-  message,
-  Divider,
-  Statistic,
+  Typography,
 } from "antd";
 
 import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  PhoneOutlined,
   EnvironmentOutlined,
+  ExclamationCircleOutlined,
   SafetyOutlined,
-  FileProtectOutlined,
-  AlertOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 
+import {
+  fetchEmergencyInformation,
+  selectEmergencyInformation,
+  selectEmergencyLoading,
+  selectEmergencyError,
+} from "../store/slices/emergencySlice";
+
 const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
 
-/* =========================================================
-   INITIAL EMERGENCY INFORMATION
-========================================================= */
+// =========================================================
+// STATUS CONFIGURATION
+// =========================================================
 
-const initialEmergencyData = [
-  {
-    id: 1,
-    title: "Flood Emergency Helpline",
-    category: "Emergency Contact",
-    description:
-      "Contact the emergency response center for immediate flood-related assistance.",
-    contact: "1122",
-    location: "Nowshera",
-    priority: "Critical",
-    status: "Published",
+const STATUS_CONFIG = {
+  NORMAL: {
+    label: "Normal",
+    color: "green",
+    icon: <SafetyOutlined />,
   },
 
-  {
-    id: 2,
-    title: "Evacuation Procedure",
-    category: "Evacuation",
-    description:
-      "Residents in high-risk areas should move immediately toward designated safe zones.",
-    contact: "1122",
-    location: "Nowshera",
-    priority: "Critical",
-    status: "Published",
+  WATCH: {
+    label: "Watch",
+    color: "gold",
+    icon: <WarningOutlined />,
   },
 
-  {
-    id: 3,
-    title: "Flood Safety Guidelines",
-    category: "Safety Procedure",
-    description:
-      "Avoid entering flooded roads, bridges, drainage channels, and fast-moving water.",
-    contact: "N/A",
-    location: "All Regions",
-    priority: "High",
-    status: "Published",
+  WARNING: {
+    label: "Warning",
+    color: "orange",
+    icon: <ExclamationCircleOutlined />,
   },
 
-  {
-    id: 4,
-    title: "Emergency Shelter Information",
-    category: "Shelter",
-    description:
-      "Designated emergency shelters are available for residents displaced by flooding.",
-    contact: "N/A",
-    location: "Nowshera",
-    priority: "High",
-    status: "Draft",
+  CRITICAL: {
+    label: "Critical",
+    color: "red",
+    icon: <ExclamationCircleOutlined />,
   },
-];
+};
 
-/* =========================================================
-   COMPONENT
-========================================================= */
+// =========================================================
+// FORMAT DATE
+// =========================================================
 
-const EmergencyInformation = () => {
-  const [data, setData] = useState(initialEmergencyData);
+const formatUpdatedAt = (dateValue) => {
+  if (!dateValue) {
+    return "Not available";
+  }
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const date = new Date(dateValue);
 
-  const [editingRecord, setEditingRecord] =
-    useState(null);
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
 
-  const [form] = Form.useForm();
+  return date.toLocaleString("en-PK", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+};
 
-  /* =======================================================
-     OPEN CREATE MODAL
-  ======================================================= */
+// =========================================================
+// GET STATUS CONFIG
+// =========================================================
 
-  const handleCreate = () => {
-    setEditingRecord(null);
-
-    form.resetFields();
-
-    setModalOpen(true);
-  };
-
-  /* =======================================================
-     OPEN EDIT MODAL
-  ======================================================= */
-
-  const handleEdit = (record) => {
-    setEditingRecord(record);
-
-    form.setFieldsValue(record);
-
-    setModalOpen(true);
-  };
-
-  /* =======================================================
-     DELETE
-  ======================================================= */
-
-  const handleDelete = (id) => {
-    setData((prev) =>
-      prev.filter((item) => item.id !== id)
-    );
-
-    message.success(
-      "Emergency information deleted successfully."
-    );
-  };
-
-  /* =======================================================
-     SAVE
-  ======================================================= */
-
-  const handleSubmit = async () => {
-    try {
-      const values =
-        await form.validateFields();
-
-      /* ===============================
-         EDIT
-      =============================== */
-
-      if (editingRecord) {
-        setData((prev) =>
-          prev.map((item) =>
-            item.id === editingRecord.id
-              ? {
-                  ...item,
-                  ...values,
-                }
-              : item
-          )
-        );
-
-        message.success(
-          "Emergency information updated successfully."
-        );
-      }
-
-      /* ===============================
-         CREATE
-      =============================== */
-
-      else {
-        const newRecord = {
-          id: Date.now(),
-          ...values,
-        };
-
-        setData((prev) => [
-          ...prev,
-          newRecord,
-        ]);
-
-        message.success(
-          "Emergency information created successfully."
-        );
-      }
-
-      setModalOpen(false);
-
-      form.resetFields();
-
-      setEditingRecord(null);
-    } catch (error) {
-      // Validation errors are handled by Ant Design.
-    }
-  };
-
-  /* =======================================================
-     TABLE COLUMNS
-  ======================================================= */
-
-  const columns = [
-    {
-      title: "Emergency Information",
-      dataIndex: "title",
-      key: "title",
-
-      render: (value, record) => (
-        <Space align="start">
-          <AlertOutlined
-            style={{
-              color:
-                record.priority === "Critical"
-                  ? "#ff4d4f"
-                  : "#faad14",
-
-              marginTop: 4,
-            }}
-          />
-
-          <div>
-            <Text strong>
-              {value}
-            </Text>
-
-            <br />
-
-            <Text
-              type="secondary"
-              style={{
-                fontSize: 12,
-              }}
-            >
-              {record.category}
-            </Text>
-          </div>
-        </Space>
-      ),
-    },
-
-    {
-      title: "Location",
-      dataIndex: "location",
-      key: "location",
-
-      render: (value) => (
-        <Space>
-          <EnvironmentOutlined />
-
-          <span>{value}</span>
-        </Space>
-      ),
-    },
-
-    {
-      title: "Contact",
-      dataIndex: "contact",
-      key: "contact",
-
-      render: (value) => (
-        <Space>
-          {value !== "N/A" && (
-            <PhoneOutlined />
-          )}
-
-          <Text strong={value !== "N/A"}>
-            {value}
-          </Text>
-        </Space>
-      ),
-    },
-
-    {
-      title: "Priority",
-      dataIndex: "priority",
-      key: "priority",
-
-      render: (value) => {
-        let color = "default";
-
-        if (value === "Critical") {
-          color = "error";
-        }
-
-        if (value === "High") {
-          color = "warning";
-        }
-
-        if (value === "Medium") {
-          color = "processing";
-        }
-
-        return (
-          <Tag color={color}>
-            {value}
-          </Tag>
-        );
-      },
-    },
-
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-
-      render: (value) => (
-        <Tag
-          color={
-            value === "Published"
-              ? "success"
-              : "default"
-          }
-        >
-          {value}
-        </Tag>
-      ),
-    },
-
-    {
-      title: "Action",
-      key: "action",
-
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() =>
-              handleEdit(record)
-            }
-          >
-            Edit
-          </Button>
-
-          <Popconfirm
-            title="Delete emergency information?"
-            description="This action cannot be undone."
-            okText="Delete"
-            cancelText="Cancel"
-            okButtonProps={{
-              danger: true,
-            }}
-            onConfirm={() =>
-              handleDelete(record.id)
-            }
-          >
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              Delete
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
-
-  const total = data.length;
-
-  const published = data.filter(
-    (item) =>
-      item.status === "Published"
-  ).length;
-
-  const critical = data.filter(
-    (item) =>
-      item.priority === "Critical"
-  ).length;
-
-  const shelters = data.filter(
-    (item) =>
-      item.category === "Shelter"
-  ).length;
-
-  /* =======================================================
-     RENDER
-  ======================================================= */
-
+const getStatusConfig = (status) => {
   return (
-    <div>
+    STATUS_CONFIG[status] || {
+      label: status || "Unknown",
+      color: "default",
+      icon: <WarningOutlined />,
+    }
+  );
+};
 
-      {/* =================================================
-          PAGE HEADER
-      ================================================= */}
+// =========================================================
+// MAIN COMPONENT
+// =========================================================
 
+const EmergencyInfo = () => {
+  const dispatch = useDispatch();
+
+  // =======================================================
+  // REDUX STATE
+  // =======================================================
+
+  const emergencyInformation = useSelector(
+    selectEmergencyInformation
+  );
+
+  const loading = useSelector(
+    selectEmergencyLoading
+  );
+
+  const error = useSelector(
+    selectEmergencyError
+  );
+
+  // =======================================================
+  // FETCH EMERGENCY INFORMATION
+  // =======================================================
+
+  useEffect(() => {
+    dispatch(
+      fetchEmergencyInformation({
+        node_id: 2,
+      })
+    );
+  }, [dispatch]);
+
+  // =======================================================
+  // CURRENT EMERGENCY
+  // =======================================================
+
+  const emergency =
+    emergencyInformation?.[0] || null;
+
+  // =======================================================
+  // LOADING STATE
+  // =======================================================
+
+  if (loading) {
+    return (
       <div
         style={{
-          marginBottom: 24,
-
+          minHeight: "400px",
           display: "flex",
-
-          justifyContent:
-            "space-between",
-
           alignItems: "center",
-
-          gap: 16,
-
-          flexWrap: "wrap",
+          justifyContent: "center",
         }}
       >
-        <div>
-          <Title
-            level={3}
-            style={{
-              marginBottom: 4,
-            }}
-          >
-            Emergency Information
-          </Title>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
-          <Text type="secondary">
-            Manage emergency contacts, evacuation
-            information, safety procedures, shelters,
-            and critical public information.
-          </Text>
-        </div>
+  // =======================================================
+  // ERROR STATE
+  // =======================================================
 
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleCreate}
+  if (error) {
+    return (
+      <div style={{ padding: "24px" }}>
+        <Alert
+          type="error"
+          showIcon
+          message="Unable to load emergency information"
+          description={error}
+        />
+      </div>
+    );
+  }
+
+  // =======================================================
+  // EMPTY STATE
+  // =======================================================
+
+  if (!emergency) {
+    return (
+      <div style={{ padding: "24px" }}>
+        <Empty
+          description="No emergency information is currently available."
+        />
+      </div>
+    );
+  }
+
+  // =======================================================
+  // STATUS
+  // =======================================================
+
+  const statusConfig =
+    getStatusConfig(emergency.status);
+
+  // =======================================================
+  // SAFE LOCATIONS
+  // =======================================================
+
+  const safeLocations = Array.isArray(
+    emergency.safe_locations
+  )
+    ? emergency.safe_locations
+    : [];
+
+  // =======================================================
+  // NODE / LOCATION INFORMATION
+  // =======================================================
+
+  const locationName =
+    emergency.location_name ||
+    emergency.node_name ||
+    "Nowshera";
+
+  const nodeName =
+    emergency.node_name ||
+    "Nowshera";
+
+  // =======================================================
+  // RENDER
+  // =======================================================
+
+  return (
+    <div
+      style={{
+        padding: "24px",
+        maxWidth: "1400px",
+        margin: "0 auto",
+      }}
+    >
+      {/* ===================================================
+          PAGE HEADER
+      =================================================== */}
+
+      <div style={{ marginBottom: "24px" }}>
+        <Title
+          level={2}
+          style={{ marginBottom: "8px" }}
         >
-          Add Emergency Information
-        </Button>
+          Emergency Information
+        </Title>
+
+        <Text type="secondary">
+          Current flood emergency information,
+          evacuation guidance, and safety instructions.
+        </Text>
       </div>
 
-      {/* =================================================
-          STATISTICS
-      ================================================= */}
+      {/* ===================================================
+          ACTIVE EMERGENCY ALERT
+      =================================================== */}
 
-      <Row
-        gutter={[
-          16,
-          16,
-        ]}
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
-            <Statistic
-              title="Total Information"
-              value={total}
-              prefix={
-                <FileProtectOutlined />
-              }
-            />
-          </Card>
-        </Col>
+      {emergency.active_emergency && (
+        <Alert
+          type="error"
+          showIcon
+          icon={<ExclamationCircleOutlined />}
+          message="Active Emergency"
+          description="An emergency situation is currently active. Follow official instructions and evacuation guidance."
+          style={{
+            marginBottom: "24px",
+          }}
+        />
+      )}
 
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
-            <Statistic
-              title="Published"
-              value={published}
-              prefix={
-                <SafetyOutlined />
-              }
-            />
-          </Card>
-        </Col>
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
-            <Statistic
-              title="Critical"
-              value={critical}
-              prefix={
-                <AlertOutlined />
-              }
-            />
-          </Card>
-        </Col>
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
-            <Statistic
-              title="Shelters"
-              value={shelters}
-              prefix={
-                <EnvironmentOutlined />
-              }
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* =================================================
-          EMERGENCY INFORMATION TABLE
-      ================================================= */}
+      {/* ===================================================
+          CURRENT EMERGENCY STATUS
+      =================================================== */}
 
       <Card
-        title={
-          <Space>
-            <AlertOutlined />
-
-            <span>
-              Emergency Information Registry
-            </span>
-          </Space>
-        }
+        title="Current Emergency Status"
+        style={{
+          marginBottom: "24px",
+        }}
       >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={data}
-          pagination={{
-            pageSize: 8,
+        <Row gutter={[24, 24]}>
+          {/* STATUS */}
+
+          <Col
+            xs={24}
+            sm={12}
+            md={8}
+          >
+            <div>
+              <Text
+                type="secondary"
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                Status
+              </Text>
+
+              <Tag
+                color={statusConfig.color}
+                icon={statusConfig.icon}
+                style={{
+                  fontSize: "15px",
+                  padding: "6px 12px",
+                }}
+              >
+                {statusConfig.label}
+              </Tag>
+            </div>
+          </Col>
+
+          {/* LOCATION */}
+
+          <Col
+            xs={24}
+            sm={12}
+            md={8}
+          >
+            <div>
+              <Text
+                type="secondary"
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                Monitoring Area
+              </Text>
+
+              <Text strong>
+                <EnvironmentOutlined
+                  style={{
+                    marginRight: "6px",
+                  }}
+                />
+
+                {locationName}
+              </Text>
+            </div>
+          </Col>
+
+          {/* UPDATED */}
+
+          <Col
+            xs={24}
+            sm={12}
+            md={8}
+          >
+            <div>
+              <Text
+                type="secondary"
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                Last Updated
+              </Text>
+
+              <Text strong>
+                {formatUpdatedAt(
+                  emergency.updated_at
+                )}
+              </Text>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* ===================================================
+          MONITORING AREA
+      =================================================== */}
+
+      <Card
+        title="Monitoring Area"
+        style={{
+          marginBottom: "24px",
+        }}
+      >
+        <Row gutter={[24, 24]}>
+          <Col
+            xs={24}
+            md={12}
+          >
+            <Text type="secondary">
+              Monitoring Node
+            </Text>
+
+            <div style={{ marginTop: "6px" }}>
+              <Text strong>
+                {nodeName}
+              </Text>
+            </div>
+          </Col>
+
+          <Col
+            xs={24}
+            md={6}
+          >
+            <Text type="secondary">
+              Device ID
+            </Text>
+
+            <div style={{ marginTop: "6px" }}>
+              <Text strong>
+                {emergency.device_id ||
+                  "Not available"}
+              </Text>
+            </div>
+          </Col>
+
+          <Col
+            xs={24}
+            md={6}
+          >
+            <Text type="secondary">
+              Node ID
+            </Text>
+
+            <div style={{ marginTop: "6px" }}>
+              <Text strong>
+                {emergency.node_id}
+              </Text>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* ===================================================
+          CURRENT SITUATION
+      =================================================== */}
+
+      <Card
+        title="Current Situation"
+        style={{
+          marginBottom: "24px",
+        }}
+      >
+        <Paragraph
+          style={{
+            marginBottom: "16px",
           }}
-          scroll={{
-            x: 1000,
+        >
+          <Text strong>
+            Affected Area:
+          </Text>{" "}
+          {emergency.affected_area ||
+            "No affected area information available."}
+        </Paragraph>
+
+        <Paragraph
+          style={{
+            marginBottom: 0,
           }}
+        >
+          <Text strong>
+            Situation:
+          </Text>{" "}
+          {emergency.message ||
+            "No current situation message available."}
+        </Paragraph>
+      </Card>
+
+      {/* ===================================================
+          WHAT YOU SHOULD DO
+      =================================================== */}
+
+      <Card
+        title="What You Should Do"
+        style={{
+          marginBottom: "24px",
+        }}
+      >
+        <List
+          dataSource={[
+            "Stay alert and monitor official flood warnings.",
+            "Avoid travelling through flooded roads or river channels.",
+            "Keep important documents, medicines, and emergency supplies ready.",
+            "Follow instructions from local authorities and emergency services.",
+            "Move to safer or higher ground if conditions deteriorate.",
+          ]}
+          renderItem={(item) => (
+            <List.Item>
+              <Text>
+                • {item}
+              </Text>
+            </List.Item>
+          )}
         />
       </Card>
 
-      {/* =================================================
-          CREATE / EDIT MODAL
-      ================================================= */}
+      {/* ===================================================
+          EVACUATION INFORMATION
+      =================================================== */}
 
-      <Modal
-        title={
-          editingRecord
-            ? "Edit Emergency Information"
-            : "Add Emergency Information"
-        }
-        open={modalOpen}
-        onCancel={() => {
-          setModalOpen(false);
-          form.resetFields();
-          setEditingRecord(null);
+      <Card
+        title="Evacuation Information"
+        style={{
+          marginBottom: "24px",
         }}
-        onOk={handleSubmit}
-        okText={
-          editingRecord
-            ? "Update"
-            : "Create"
-        }
-        width={700}
-        destroyOnHidden
       >
-        <Divider />
+        <Alert
+          type={
+            emergency.evacuation_required
+              ? "error"
+              : "success"
+          }
+          showIcon
+          message={
+            emergency.evacuation_required
+              ? "Evacuation Required"
+              : "Evacuation Not Currently Required"
+          }
+          description={
+            emergency.evacuation_required
+              ? "Residents in affected areas should follow official evacuation instructions and move to designated safe locations."
+              : "There is currently no evacuation requirement for the monitored area. Continue monitoring official instructions."
+          }
+        />
 
-        <Form
-          form={form}
-          layout="vertical"
-        >
-          <Row
-            gutter={[
-              16,
-              0,
-            ]}
+        {/* SAFE LOCATIONS */}
+
+        {safeLocations.length > 0 && (
+          <div
+            style={{
+              marginTop: "24px",
+            }}
           >
-            <Col
-              xs={24}
-              md={16}
-            >
-              <Form.Item
-                label="Title"
-                name="title"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please enter a title.",
-                  },
-                ]}
-              >
-                <Input
-                  placeholder="e.g. Flood Emergency Helpline"
-                />
-              </Form.Item>
-            </Col>
+            <Text strong>
+              Recommended Safe Locations
+            </Text>
 
-            <Col
-              xs={24}
-              md={8}
-            >
-              <Form.Item
-                label="Category"
-                name="category"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please select a category.",
-                  },
-                ]}
-              >
-                <Select
-                  placeholder="Select category"
-                  options={[
-                    {
-                      value:
-                        "Emergency Contact",
-                      label:
-                        "Emergency Contact",
-                    },
-                    {
-                      value:
-                        "Evacuation",
-                      label:
-                        "Evacuation",
-                    },
-                    {
-                      value:
-                        "Safety Procedure",
-                      label:
-                        "Safety Procedure",
-                    },
-                    {
-                      value:
-                        "Shelter",
-                      label:
-                        "Shelter",
-                    },
-                    {
-                      value:
-                        "Emergency Notice",
-                      label:
-                        "Emergency Notice",
-                    },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
+            <List
+              size="small"
+              style={{
+                marginTop: "12px",
+              }}
+              dataSource={safeLocations}
+              renderItem={(location) => (
+                <List.Item>
+                  <SafetyOutlined
+                    style={{
+                      marginRight: "10px",
+                    }}
+                  />
 
-            <Col
-              xs={24}
-              md={12}
-            >
-              <Form.Item
-                label="Location"
-                name="location"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please enter the location.",
-                  },
-                ]}
-              >
-                <Input
-                  placeholder="e.g. Nowshera"
-                />
-              </Form.Item>
-            </Col>
+                  {location}
+                </List.Item>
+              )}
+            />
+          </div>
+        )}
+      </Card>
 
-            <Col
-              xs={24}
-              md={12}
-            >
-              <Form.Item
-                label="Emergency Contact"
-                name="contact"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please enter a contact number or N/A.",
-                  },
-                ]}
-              >
-                <Input
-                  prefix={
-                    <PhoneOutlined />
-                  }
-                  placeholder="e.g. 1122"
-                />
-              </Form.Item>
-            </Col>
+      {/* ===================================================
+          EMERGENCY CONTACTS
+      =================================================== */}
 
-            <Col
-              xs={24}
-              md={12}
-            >
-              <Form.Item
-                label="Priority"
-                name="priority"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please select priority.",
-                  },
-                ]}
-              >
-                <Select
-                  options={[
-                    {
-                      value:
-                        "Critical",
-                      label:
-                        "Critical",
-                    },
-                    {
-                      value:
-                        "High",
-                      label:
-                        "High",
-                    },
-                    {
-                      value:
-                        "Medium",
-                      label:
-                        "Medium",
-                    },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
+      <Card title="Emergency Contacts">
+        <Row gutter={[24, 24]}>
+          <Col
+            xs={24}
+            sm={12}
+            md={8}
+          >
+            <Text type="secondary">
+              Rescue Service
+            </Text>
 
-            <Col
-              xs={24}
-              md={12}
-            >
-              <Form.Item
-                label="Publication Status"
-                name="status"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please select status.",
-                  },
-                ]}
-              >
-                <Select
-                  options={[
-                    {
-                      value:
-                        "Published",
-                      label:
-                        "Published",
-                    },
-                    {
-                      value:
-                        "Draft",
-                      label:
-                        "Draft",
-                    },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
+            <div style={{ marginTop: "6px" }}>
+              <Text strong>
+                Rescue 1122
+              </Text>
+            </div>
+          </Col>
 
-            <Col xs={24}>
-              <Form.Item
-                label="Emergency Information"
-                name="description"
-                rules={[
-                  {
-                    required: true,
-                    message:
-                      "Please enter emergency information.",
-                  },
-                ]}
-              >
-                <TextArea
-                  rows={5}
-                  placeholder="Enter emergency instructions, safety procedures, evacuation information, or other critical public information."
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+          <Col
+            xs={24}
+            sm={12}
+            md={8}
+          >
+            <Text type="secondary">
+              Police
+            </Text>
+
+            <div style={{ marginTop: "6px" }}>
+              <Text strong>
+                15
+              </Text>
+            </div>
+          </Col>
+
+          <Col
+            xs={24}
+            sm={12}
+            md={8}
+          >
+            <Text type="secondary">
+              Emergency Medical Assistance
+            </Text>
+
+            <div style={{ marginTop: "6px" }}>
+              <Text strong>
+                1122
+              </Text>
+            </div>
+          </Col>
+        </Row>
+      </Card>
     </div>
   );
 };
 
-export default EmergencyInformation;
+export default EmergencyInfo;
