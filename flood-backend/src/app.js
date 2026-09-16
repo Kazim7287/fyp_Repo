@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -54,6 +53,12 @@ const newsRoutes = require("./routes/news.routes");
 // =========================================================
 
 const faqRoutes = require("./routes/faq.routes");
+
+// =========================================================
+// EMERGENCY INFORMATION ROUTES
+// =========================================================
+
+const emergencyRoutes = require("./routes/emergency.routes");
 
 // =========================================================
 // EXPRESS APP
@@ -138,7 +143,15 @@ app.use(
       );
     },
 
+    // -----------------------------------------------------
+    // Allow HTTP-only authentication cookies
+    // -----------------------------------------------------
+
     credentials: true,
+
+    // -----------------------------------------------------
+    // Allowed HTTP methods
+    // -----------------------------------------------------
 
     methods: [
       "GET",
@@ -148,6 +161,10 @@ app.use(
       "DELETE",
       "OPTIONS",
     ],
+
+    // -----------------------------------------------------
+    // Allowed request headers
+    // -----------------------------------------------------
 
     allowedHeaders: [
       "Content-Type",
@@ -171,6 +188,11 @@ app.use(
 
 // =========================================================
 // COOKIE PARSER
+// =========================================================
+//
+// Required for JWT authentication because the access token
+// is stored inside an HTTP-only cookie.
+//
 // =========================================================
 
 app.use(cookieParser());
@@ -440,7 +462,39 @@ app.use(
 );
 
 // =========================================================
+// EMERGENCY INFORMATION ROUTES
+// =========================================================
+//
+// PUBLIC:
+//
+// GET    /api/emergency-information
+// GET    /api/emergency-information/:id
+//
+// ADMIN:
+//
+// POST   /api/emergency-information
+// PUT    /api/emergency-information/:id
+// DELETE /api/emergency-information/:id
+//
+// Query examples:
+//
+// GET /api/emergency-information?node_id=2
+// GET /api/emergency-information?status=WATCH
+// GET /api/emergency-information?active_emergency=true
+//
+// =========================================================
+
+app.use(
+  "/api/emergency-information",
+  emergencyRoutes
+);
+
+// =========================================================
 // 404 HANDLER
+// =========================================================
+//
+// This must remain AFTER all API routes.
+//
 // =========================================================
 
 app.use((req, res) => {
