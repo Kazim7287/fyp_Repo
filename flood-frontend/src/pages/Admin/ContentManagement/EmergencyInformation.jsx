@@ -25,7 +25,7 @@ import {
   selectEmergencyInformation,
   selectEmergencyLoading,
   selectEmergencyError,
-} from "../store/slices/emergencySlice";
+} from "../../../store/slices/emergencySlice";
 
 const { Title, Text, Paragraph } = Typography;
 
