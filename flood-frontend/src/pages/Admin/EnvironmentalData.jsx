@@ -17,6 +17,7 @@ import {
   Button,
   Divider,
   message,
+  DatePicker,
 } from "antd";
 
 import {
@@ -28,9 +29,15 @@ import {
   ReloadOutlined,
   SearchOutlined,
   DatabaseOutlined,
+  DownloadOutlined,
+  FileExcelOutlined,
+  FilePdfOutlined,
+  CodeOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
 
 /*
 |--------------------------------------------------------------------------
@@ -48,19 +55,13 @@ const GEOCODING_API =
 |--------------------------------------------------------------------------
 | Backend API
 |--------------------------------------------------------------------------
-|
-| Using /api allows this to work with:
-|
-| Development:
-| http://localhost:5000/api
-|
-| Production:
-| https://floodforecast.duckdns.org/api
-|
 */
 
 const ENVIRONMENTAL_DATA_API =
   "/api/environmental-data";
+
+const ENVIRONMENTAL_EXPORT_API =
+  "/api/environmental-data/export";
 
 /*
 |--------------------------------------------------------------------------
@@ -76,6 +77,27 @@ const DEFAULT_LOCATION = {
   latitude: 34.0151,
   longitude: 71.9747,
 };
+
+/*
+|--------------------------------------------------------------------------
+| Historical Range Options
+|--------------------------------------------------------------------------
+*/
+
+const RANGE_OPTIONS = [
+  {
+    value: "24h",
+    label: "Last 24 Hours",
+  },
+  {
+    value: "7d",
+    label: "Last 7 Days",
+  },
+  {
+    value: "30d",
+    label: "Last 30 Days",
+  },
+];
 
 /*
 |--------------------------------------------------------------------------
@@ -123,6 +145,12 @@ const EnvironmentalData = () => {
   const [savingData, setSavingData] =
     useState(false);
 
+  const [historicalLoading, setHistoricalLoading] =
+    useState(false);
+
+  const [exportLoading, setExportLoading] =
+    useState(null);
+
   /*
   |--------------------------------------------------------------------------
   | Error State
@@ -130,6 +158,21 @@ const EnvironmentalData = () => {
   */
 
   const [error, setError] =
+    useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Historical Data State
+  |--------------------------------------------------------------------------
+  */
+
+  const [historicalData, setHistoricalData] =
+    useState([]);
+
+  const [selectedRange, setSelectedRange] =
+    useState("24h");
+
+  const [customDateRange, setCustomDateRange] =
     useState(null);
 
   /*
@@ -375,6 +418,97 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
+  | Build Historical Query Parameters
+  |--------------------------------------------------------------------------
+  */
+
+  const getHistoricalParams = () => {
+    const params = {
+      location: location.name,
+    };
+
+    if (
+      customDateRange &&
+      customDateRange.length === 2
+    ) {
+      params.start =
+        customDateRange[0]
+          .toISOString();
+
+      params.stop =
+        customDateRange[1]
+          .toISOString();
+
+      return params;
+    }
+
+    if (selectedRange === "24h") {
+      params.start = "-24h";
+      params.stop = "now()";
+    }
+
+    if (selectedRange === "7d") {
+      params.start = "-7d";
+      params.stop = "now()";
+    }
+
+    if (selectedRange === "30d") {
+      params.start = "-30d";
+      params.stop = "now()";
+    }
+
+    return params;
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Historical Environmental Data
+  |--------------------------------------------------------------------------
+  */
+
+  const fetchHistoricalData = async () => {
+    try {
+      setHistoricalLoading(true);
+
+      const params =
+        getHistoricalParams();
+
+      const response =
+        await axios.get(
+          `${ENVIRONMENTAL_EXPORT_API}/json`,
+          {
+            params,
+            withCredentials: true,
+          }
+        );
+
+      if (
+        response.data?.success
+      ) {
+        setHistoricalData(
+          response.data.data || []
+        );
+      } else {
+        setHistoricalData([]);
+      }
+    } catch (err) {
+      console.error(
+        "Historical environmental data error:",
+        err
+      );
+
+      setHistoricalData([]);
+
+      message.error(
+        "Unable to load historical environmental data."
+      );
+    } finally {
+      setHistoricalLoading(false);
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
   | Initial Weather Fetch
   |--------------------------------------------------------------------------
   */
@@ -383,6 +517,16 @@ const EnvironmentalData = () => {
     fetchWeather(
       DEFAULT_LOCATION
     );
+  }, []);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Initial Historical Data Fetch
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    fetchHistoricalData();
   }, []);
 
   /*
@@ -408,6 +552,22 @@ const EnvironmentalData = () => {
       );
     };
   }, [location]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Refresh Historical Data When Location Changes
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    if (location?.name) {
+      fetchHistoricalData();
+    }
+  }, [
+    location.name,
+    selectedRange,
+    customDateRange,
+  ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -468,7 +628,209 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Current Weather
+  | Handle Range Change
+  |--------------------------------------------------------------------------
+  */
+
+  const handleRangeChange =
+    (value) => {
+      setSelectedRange(
+        value
+      );
+
+      setCustomDateRange(
+        null
+      );
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Handle Custom Date Range
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCustomDateChange =
+    (dates) => {
+      if (!dates) {
+        setCustomDateRange(
+          null
+        );
+
+        return;
+      }
+
+      setCustomDateRange(
+        dates
+      );
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Export File
+  |--------------------------------------------------------------------------
+  */
+
+  const exportFile = async (
+    format
+  ) => {
+    try {
+      setExportLoading(
+        format
+      );
+
+      const params =
+        getHistoricalParams();
+
+      /*
+      | JSON
+      */
+
+      if (format === "json") {
+        const response =
+          await axios.get(
+            `${ENVIRONMENTAL_EXPORT_API}/json`,
+            {
+              params,
+              withCredentials: true,
+            }
+          );
+
+        const blob =
+          new Blob(
+            [
+              JSON.stringify(
+                response.data,
+                null,
+                2
+              ),
+            ],
+            {
+              type:
+                "application/json",
+            }
+          );
+
+        const url =
+          window.URL.createObjectURL(
+            blob
+          );
+
+        const link =
+          document.createElement(
+            "a"
+          );
+
+        link.href =
+          url;
+
+        link.download =
+          `environmental-data-${location.name}-${selectedRange}.json`;
+
+        document.body.appendChild(
+          link
+        );
+
+        link.click();
+
+        link.remove();
+
+        window.URL.revokeObjectURL(
+          url
+        );
+
+        message.success(
+          "JSON file exported successfully."
+        );
+
+        return;
+      }
+
+      /*
+      | Excel / PDF
+      */
+
+      const response =
+        await axios.get(
+          `${ENVIRONMENTAL_EXPORT_API}/${format}`,
+          {
+            params,
+            responseType:
+              "blob",
+
+            withCredentials: true,
+          }
+        );
+
+      const mimeType =
+        format === "excel"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "application/pdf";
+
+      const extension =
+        format === "excel"
+          ? "xlsx"
+          : "pdf";
+
+      const blob =
+        new Blob(
+          [
+            response.data,
+          ],
+          {
+            type: mimeType,
+          }
+        );
+
+      const url =
+        window.URL.createObjectURL(
+          blob
+        );
+
+      const link =
+        document.createElement(
+          "a"
+        );
+
+      link.href =
+        url;
+
+      link.download =
+        `environmental-data-${location.name}-${selectedRange}.${extension}`;
+
+      document.body.appendChild(
+        link
+      );
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(
+        url
+      );
+
+      message.success(
+        `${format.toUpperCase()} file exported successfully.`
+      );
+    } catch (err) {
+      console.error(
+        `${format} export error:`,
+        err
+      );
+
+      message.error(
+        `Unable to export ${format.toUpperCase()} file.`
+      );
+    } finally {
+      setExportLoading(
+        null
+      );
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Current Weather Values
   |--------------------------------------------------------------------------
   */
 
@@ -594,10 +956,6 @@ const EnvironmentalData = () => {
 
     /*
     | Soil Moisture
-    |
-    | Open-Meteo returns m³/m³.
-    | Example:
-    | 0.32 = 32%
     */
 
     if (
@@ -642,7 +1000,7 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Table Data
+  | Current Table Data
   |--------------------------------------------------------------------------
   */
 
@@ -775,7 +1133,7 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Table Columns
+  | Current Table Columns
   |--------------------------------------------------------------------------
   */
 
@@ -901,6 +1259,173 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
+  | Historical Table Columns
+  |--------------------------------------------------------------------------
+  */
+
+  const historicalColumns = [
+    {
+      title:
+        "Date & Time",
+
+      dataIndex:
+        "timestamp",
+
+      key:
+        "timestamp",
+
+      fixed:
+        "left",
+
+      width: 190,
+
+      render:
+        (timestamp) =>
+          timestamp
+            ? new Date(
+                timestamp
+              ).toLocaleString(
+                "en-PK",
+                {
+                  dateStyle:
+                    "medium",
+
+                  timeStyle:
+                    "short",
+                }
+              )
+            : "N/A",
+    },
+
+    {
+      title:
+        "Location",
+
+      dataIndex:
+        "location",
+
+      key:
+        "location",
+
+      width: 140,
+
+      render:
+        (value) => (
+          <Tag color="blue">
+            {value ||
+              "N/A"}
+          </Tag>
+        ),
+    },
+
+    {
+      title:
+        "Temperature",
+
+      dataIndex:
+        "temperature",
+
+      key:
+        "temperature",
+
+      render:
+        (value) =>
+          value != null
+            ? `${Number(
+                value
+              ).toFixed(
+                2
+              )} °C`
+            : "N/A",
+    },
+
+    {
+      title:
+        "Humidity",
+
+      dataIndex:
+        "humidity",
+
+      key:
+        "humidity",
+
+      render:
+        (value) =>
+          value != null
+            ? `${Number(
+                value
+              ).toFixed(
+                2
+              )} %`
+            : "N/A",
+    },
+
+    {
+      title:
+        "Rainfall",
+
+      dataIndex:
+        "rainfall",
+
+      key:
+        "rainfall",
+
+      render:
+        (value) =>
+          value != null
+            ? `${Number(
+                value
+              ).toFixed(
+                2
+              )} mm`
+            : "N/A",
+    },
+
+    {
+      title:
+        "Soil Moisture",
+
+      dataIndex:
+        "soil_moisture",
+
+      key:
+        "soil_moisture",
+
+      render:
+        (value) =>
+          value != null
+            ? `${Number(
+                value
+              ).toFixed(
+                3
+              )} m³/m³`
+            : "N/A",
+    },
+
+    {
+      title:
+        "Wind Speed",
+
+      dataIndex:
+        "wind_speed",
+
+      key:
+        "wind_speed",
+
+      render:
+        (value) =>
+          value != null
+            ? `${Number(
+                value
+              ).toFixed(
+                2
+              )} km/h`
+            : "N/A",
+    },
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
   | Loading Screen
   |--------------------------------------------------------------------------
   */
@@ -960,10 +1485,11 @@ const EnvironmentalData = () => {
         <Text type="secondary">
           Monitor real-time
           environmental
-          conditions and
-          automatically store
+          conditions, store
           measurements in
-          InfluxDB Cloud.
+          InfluxDB Cloud, and
+          export historical
+          environmental data.
         </Text>
       </div>
 
@@ -1310,6 +1836,9 @@ const EnvironmentalData = () => {
             </span>
           </Space>
         }
+        style={{
+          marginBottom: 24,
+        }}
       >
         <Table
           rowKey="key"
@@ -1327,6 +1856,240 @@ const EnvironmentalData = () => {
           }
           scroll={{
             x: "max-content",
+          }}
+        />
+      </Card>
+
+      {/* ================================================= */}
+      {/* HISTORICAL DATA / EXPORT */}
+      {/* ================================================= */}
+
+      <Card
+        title={
+          <Space>
+            <HistoryOutlined />
+
+            <span>
+              Historical Environmental Data
+            </span>
+          </Space>
+        }
+        extra={
+          <Tag color="blue">
+            {historicalData.length} Records
+          </Tag>
+        }
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        {/* FILTERS */}
+
+        <Space
+          wrap
+          size="middle"
+          style={{
+            marginBottom: 20,
+          }}
+        >
+          <Space>
+            <Text strong>
+              Time Range:
+            </Text>
+
+            <Select
+              value={
+                selectedRange
+              }
+              style={{
+                width: 160,
+              }}
+              options={
+                RANGE_OPTIONS
+              }
+              onChange={
+                handleRangeChange
+              }
+            />
+          </Space>
+
+          <Space>
+            <Text strong>
+              Custom Range:
+            </Text>
+
+            <RangePicker
+              showTime
+              onChange={
+                handleCustomDateChange
+              }
+              format="YYYY-MM-DD HH:mm"
+            />
+          </Space>
+
+          <Button
+            icon={
+              <ReloadOutlined />
+            }
+            onClick={
+              fetchHistoricalData
+            }
+            loading={
+              historicalLoading
+            }
+          >
+            Refresh History
+          </Button>
+        </Space>
+
+        <Divider />
+
+        {/* EXPORT BUTTONS */}
+
+        <Space
+          wrap
+          size="middle"
+          style={{
+            marginBottom: 20,
+          }}
+        >
+          <Text strong>
+            Export Data:
+          </Text>
+
+          <Button
+            type="primary"
+            icon={
+              <CodeOutlined />
+            }
+            loading={
+              exportLoading ===
+              "json"
+            }
+            onClick={() =>
+              exportFile(
+                "json"
+              )
+            }
+          >
+            Export JSON
+          </Button>
+
+          <Button
+            icon={
+              <FileExcelOutlined />
+            }
+            loading={
+              exportLoading ===
+              "excel"
+            }
+            onClick={() =>
+              exportFile(
+                "excel"
+              )
+            }
+          >
+            Export Excel
+          </Button>
+
+          <Button
+            icon={
+              <FilePdfOutlined />
+            }
+            loading={
+              exportLoading ===
+              "pdf"
+            }
+            onClick={() =>
+              exportFile(
+                "pdf"
+              )
+            }
+          >
+            Export PDF
+          </Button>
+        </Space>
+
+        {/* FILTER SUMMARY */}
+
+        <Alert
+          type="info"
+          showIcon
+          message="Export Filter"
+          description={
+            <>
+              <Text>
+                Location:{" "}
+                <strong>
+                  {location.name}
+                </strong>
+              </Text>
+
+              <br />
+
+              <Text>
+                Period:{" "}
+                <strong>
+                  {customDateRange
+                    ? "Custom Date Range"
+                    : RANGE_OPTIONS.find(
+                        (
+                          item
+                        ) =>
+                          item.value ===
+                          selectedRange
+                      )?.label}
+                </strong>
+              </Text>
+
+              <br />
+
+              <Text>
+                Records available:{" "}
+                <strong>
+                  {
+                    historicalData.length
+                  }
+                </strong>
+              </Text>
+            </>
+          }
+          style={{
+            marginBottom: 20,
+          }}
+        />
+
+        {/* HISTORICAL TABLE */}
+
+        <Table
+          rowKey={(
+            record,
+            index
+          ) =>
+            `${record.timestamp}-${record.location}-${index}`
+          }
+          columns={
+            historicalColumns
+          }
+          dataSource={
+            historicalData
+          }
+          loading={
+            historicalLoading
+          }
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal:
+              (total) =>
+                `Total ${total} records`,
+          }}
+          scroll={{
+            x: 1100,
+          }}
+          locale={{
+            emptyText:
+              "No historical environmental data found for this location and time range.",
           }}
         />
       </Card>
@@ -1354,6 +2117,19 @@ const EnvironmentalData = () => {
           Cloud through the
           Flood Forecasting
           backend.
+        </Text>
+
+        <Text type="secondary">
+          Historical measurements
+          can be filtered by
+          location and time
+          range.
+        </Text>
+
+        <Text type="secondary">
+          Historical data can
+          be exported in JSON,
+          Excel, and PDF formats.
         </Text>
 
         <Text type="secondary">

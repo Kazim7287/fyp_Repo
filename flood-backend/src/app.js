@@ -74,6 +74,14 @@ const emergencyRoutes = require("./routes/emergency.routes");
 const environmentalRoutes = require("./routes/environmental.routes");
 
 // =========================================================
+// ENVIRONMENTAL DATA EXPORT ROUTES
+// =========================================================
+
+const environmentalExportRoutes = require(
+  "./routes/environmentalExport.routes"
+);
+
+// =========================================================
 // EXPRESS APP
 // =========================================================
 
@@ -106,7 +114,8 @@ const allowedOrigins = [
 // ---------------------------------------------------------
 
 if (process.env.FRONTEND_URL) {
-  const frontendUrl = process.env.FRONTEND_URL.trim();
+  const frontendUrl =
+    process.env.FRONTEND_URL.trim();
 
   if (
     frontendUrl &&
@@ -228,7 +237,8 @@ app.get(
   (req, res) => {
     return res.status(200).json({
       success: true,
-      message: "Flood Forecasting API is running",
+      message:
+        "Flood Forecasting API is running",
     });
   }
 );
@@ -241,9 +251,10 @@ app.get(
   "/db-test",
   async (req, res) => {
     try {
-      const result = await pool.query(
-        "SELECT NOW() AS current_time"
-      );
+      const result =
+        await pool.query(
+          "SELECT NOW() AS current_time"
+        );
 
       return res.status(200).json({
         success: true,
@@ -274,11 +285,6 @@ app.get(
 
 // =========================================================
 // INFLUXDB CONNECTION TEST
-// =========================================================
-//
-// Temporary endpoint for testing the InfluxDB Cloud
-// configuration.
-//
 // =========================================================
 
 app.get(
@@ -478,7 +484,7 @@ app.use(
 // ENVIRONMENTAL DATA ROUTES
 // =========================================================
 //
-// React EnvironmentalData page will use:
+// React EnvironmentalData page:
 //
 // POST /api/environmental-data
 //
@@ -487,6 +493,29 @@ app.use(
 app.use(
   "/api/environmental-data",
   environmentalRoutes
+);
+
+// =========================================================
+// ENVIRONMENTAL DATA EXPORT ROUTES
+// =========================================================
+//
+// JSON:
+//
+// GET /api/environmental-data/export/json
+//
+// Excel:
+//
+// GET /api/environmental-data/export/excel
+//
+// PDF:
+//
+// GET /api/environmental-data/export/pdf
+//
+// =========================================================
+
+app.use(
+  "/api/environmental-data/export",
+  environmentalExportRoutes
 );
 
 // =========================================================
