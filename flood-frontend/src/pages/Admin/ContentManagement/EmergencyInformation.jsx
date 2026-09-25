@@ -1,6 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-
 import {
   Alert,
   Card,
@@ -8,11 +7,12 @@ import {
   Empty,
   List,
   Row,
+  Select,
   Spin,
   Tag,
   Typography,
+  message,
 } from "antd";
-
 import {
   EnvironmentOutlined,
   ExclamationCircleOutlined,
@@ -28,581 +28,658 @@ import {
 } from "../../../store/slices/emergencySlice";
 
 const { Title, Text, Paragraph } = Typography;
-
-// =========================================================
-// STATUS CONFIGURATION
-// =========================================================
+const { Option } = Select;
 
 const STATUS_CONFIG = {
   NORMAL: {
     label: "Normal",
     color: "green",
     icon: <SafetyOutlined />,
+    description: "No immediate flood threat has been reported.",
   },
-
   WATCH: {
     label: "Watch",
     color: "gold",
     icon: <WarningOutlined />,
+    description:
+      "Conditions are being monitored. Residents should remain alert.",
   },
-
   WARNING: {
     label: "Warning",
     color: "orange",
-    icon: <ExclamationCircleOutlined />,
+    icon: <WarningOutlined />,
+    description:
+      "Flood risk is elevated. Residents should prepare for possible action.",
   },
-
   CRITICAL: {
     label: "Critical",
     color: "red",
     icon: <ExclamationCircleOutlined />,
+    description:
+      "A critical flood situation is active. Follow official emergency instructions.",
   },
 };
 
-// =========================================================
-// FORMAT DATE
-// =========================================================
+const formatDate = (date) => {
+  if (!date) return "Not available";
 
-const formatUpdatedAt = (dateValue) => {
-  if (!dateValue) {
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
     return "Not available";
   }
 
-  const date = new Date(dateValue);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not available";
-  }
-
-  return date.toLocaleString("en-PK", {
+  return parsedDate.toLocaleString("en-PK", {
     dateStyle: "medium",
     timeStyle: "short",
   });
 };
 
-// =========================================================
-// GET STATUS CONFIG
-// =========================================================
+const normalizeNodes = (response) => {
+  /*
+   * Supports common backend response formats:
+   *
+   * { success: true, data: [...] }
+   * { data: [...] }
+   * [...]
+   */
+  if (Array.isArray(response)) {
+    return response;
+  }
 
-const getStatusConfig = (status) => {
-  return (
-    STATUS_CONFIG[status] || {
-      label: status || "Unknown",
-      color: "default",
-      icon: <WarningOutlined />,
-    }
-  );
+  if (Array.isArray(response?.data)) {
+    return response.data;
+  }
+
+  if (Array.isArray(response?.data?.data)) {
+    return response.data.data;
+  }
+
+  return [];
 };
 
-// =========================================================
-// MAIN COMPONENT
-// =========================================================
+const normalizeEmergencyData = (response) => {
+  /*
+   * Supports:
+   *
+   * { success: true, data: [...] }
+   * { data: [...] }
+   * [...]
+   */
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (Array.isArray(response?.data)) {
+    return response.data;
+  }
+
+  return [];
+};
 
 const EmergencyInfo = () => {
   const dispatch = useDispatch();
 
-  // =======================================================
-  // REDUX STATE
-  // =======================================================
+  const emergencyInformation = useSelector(selectEmergencyInformation);
+  const emergencyLoading = useSelector(selectEmergencyLoading);
+  const emergencyError = useSelector(selectEmergencyError);
 
-  const emergencyInformation = useSelector(
-    selectEmergencyInformation
-  );
+  const [nodes, setNodes] = useState([]);
+  const [nodesLoading, setNodesLoading] = useState(false);
+  const [nodesError, setNodesError] = useState(null);
 
-  const loading = useSelector(
-    selectEmergencyLoading
-  );
+  /*
+   * This is the dynamically selected database node ID.
+   *
+   * IMPORTANT:
+   * There is NO hardcoded node_id here.
+   */
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
 
-  const error = useSelector(
-    selectEmergencyError
-  );
-
-  // =======================================================
-  // FETCH EMERGENCY INFORMATION
-  // =======================================================
-
+  /*
+   * Load all nodes dynamically.
+   */
   useEffect(() => {
+    const loadNodes = async () => {
+      try {
+        setNodesLoading(true);
+        setNodesError(null);
+
+        const response = await fetch("/api/nodes", {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load nodes (${response.status})`);
+        }
+
+        const result = await response.json();
+
+        const loadedNodes = normalizeNodes(result);
+
+        setNodes(loadedNodes);
+
+        /*
+         * Automatically select the first available node.
+         *
+         * This is NOT hardcoding a node ID.
+         * The ID comes from the database/API response.
+         */
+        if (loadedNodes.length > 0) {
+          setSelectedNodeId(loadedNodes[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load nodes:", error);
+        setNodesError(error.message || "Failed to load nodes.");
+      } finally {
+        setNodesLoading(false);
+      }
+    };
+
+    loadNodes();
+  }, []);
+
+  /*
+   * Fetch emergency information whenever the selected
+   * database node changes.
+   */
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+
     dispatch(
       fetchEmergencyInformation({
-        node_id: 2,
+        node_id: selectedNodeId,
       })
     );
-  }, [dispatch]);
+  }, [dispatch, selectedNodeId]);
 
-  // =======================================================
-  // CURRENT EMERGENCY
-  // =======================================================
-
-  const emergency =
-    emergencyInformation?.[0] || null;
-
-  // =======================================================
-  // LOADING STATE
-  // =======================================================
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: "400px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Spin size="large" />
-      </div>
+  /*
+   * Find the selected node from the dynamically loaded nodes.
+   */
+  const selectedNode = useMemo(() => {
+    return nodes.find(
+      (node) => String(node.id) === String(selectedNodeId)
     );
-  }
+  }, [nodes, selectedNodeId]);
 
-  // =======================================================
-  // ERROR STATE
-  // =======================================================
+  /*
+   * The API normally returns an array.
+   */
+  const emergency = emergencyInformation?.[0] || null;
 
-  if (error) {
-    return (
-      <div style={{ padding: "24px" }}>
-        <Alert
-          type="error"
-          showIcon
-          message="Unable to load emergency information"
-          description={error}
-        />
-      </div>
-    );
-  }
+  /*
+   * Prefer emergency information returned by the API.
+   * Fall back to the selected node information.
+   */
+  const locationName =
+    emergency?.location_name ||
+    emergency?.node_name ||
+    selectedNode?.location_name ||
+    selectedNode?.node_name ||
+    "Selected monitoring node";
 
-  // =======================================================
-  // EMPTY STATE
-  // =======================================================
+  const nodeName =
+    emergency?.node_name ||
+    selectedNode?.node_name ||
+    selectedNode?.location_name ||
+    "Monitoring Node";
 
-  if (!emergency) {
-    return (
-      <div style={{ padding: "24px" }}>
-        <Empty
-          description="No emergency information is currently available."
-        />
-      </div>
-    );
-  }
+  const deviceId =
+    emergency?.device_id ||
+    selectedNode?.device_id ||
+    "N/A";
 
-  // =======================================================
-  // STATUS
-  // =======================================================
+  const status = emergency?.status || "NORMAL";
 
   const statusConfig =
-    getStatusConfig(emergency.status);
+    STATUS_CONFIG[status] || STATUS_CONFIG.NORMAL;
 
-  // =======================================================
-  // SAFE LOCATIONS
-  // =======================================================
-
-  const safeLocations = Array.isArray(
-    emergency.safe_locations
-  )
+  const safeLocations = Array.isArray(emergency?.safe_locations)
     ? emergency.safe_locations
     : [];
 
-  // =======================================================
-  // NODE / LOCATION INFORMATION
-  // =======================================================
+  /*
+   * Show emergency alert only when active.
+   */
+  const isActiveEmergency =
+    emergency?.active_emergency === true ||
+    emergency?.active_emergency === "true";
 
-  const locationName =
-    emergency.location_name ||
-    emergency.node_name ||
-    "Nowshera";
+  const evacuationRequired =
+    emergency?.evacuation_required === true ||
+    emergency?.evacuation_required === "true";
 
-  const nodeName =
-    emergency.node_name ||
-    "Nowshera";
+  const handleNodeChange = (value) => {
+    setSelectedNodeId(value);
+  };
 
-  // =======================================================
-  // RENDER
-  // =======================================================
-
-  return (
-    <div
-      style={{
-        padding: "24px",
-        maxWidth: "1400px",
-        margin: "0 auto",
-      }}
-    >
-      {/* ===================================================
-          PAGE HEADER
-      =================================================== */}
-
-      <div style={{ marginBottom: "24px" }}>
-        <Title
-          level={2}
-          style={{ marginBottom: "8px" }}
-        >
-          Emergency Information
-        </Title>
-
-        <Text type="secondary">
-          Current flood emergency information,
-          evacuation guidance, and safety instructions.
-        </Text>
-      </div>
-
-      {/* ===================================================
-          ACTIVE EMERGENCY ALERT
-      =================================================== */}
-
-      {emergency.active_emergency && (
+  /*
+   * Node loading error
+   */
+  if (nodesError) {
+    return (
+      <div style={{ padding: 24 }}>
         <Alert
           type="error"
           showIcon
-          icon={<ExclamationCircleOutlined />}
-          message="Active Emergency"
-          description="An emergency situation is currently active. Follow official instructions and evacuation guidance."
-          style={{
-            marginBottom: "24px",
-          }}
+          message="Unable to load monitoring nodes"
+          description={nodesError}
         />
-      )}
+      </div>
+    );
+  }
 
-      {/* ===================================================
-          CURRENT EMERGENCY STATUS
-      =================================================== */}
-
-      <Card
-        title="Current Emergency Status"
+  return (
+    <div style={{ padding: 24 }}>
+      {/* PAGE HEADER */}
+      <div
         style={{
-          marginBottom: "24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 16,
+          marginBottom: 24,
+          flexWrap: "wrap",
         }}
       >
-        <Row gutter={[24, 24]}>
-          {/* STATUS */}
+        <div>
+          <Title level={2} style={{ marginBottom: 4 }}>
+            Emergency Information
+          </Title>
 
-          <Col
-            xs={24}
-            sm={12}
-            md={8}
-          >
-            <div>
-              <Text
-                type="secondary"
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                Status
-              </Text>
+          <Text type="secondary">
+            Monitor and manage emergency information for registered
+            flood-monitoring nodes.
+          </Text>
+        </div>
 
-              <Tag
-                color={statusConfig.color}
-                icon={statusConfig.icon}
-                style={{
-                  fontSize: "15px",
-                  padding: "6px 12px",
-                }}
-              >
-                {statusConfig.label}
-              </Tag>
-            </div>
-          </Col>
-
-          {/* LOCATION */}
-
-          <Col
-            xs={24}
-            sm={12}
-            md={8}
-          >
-            <div>
-              <Text
-                type="secondary"
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                Monitoring Area
-              </Text>
-
-              <Text strong>
-                <EnvironmentOutlined
-                  style={{
-                    marginRight: "6px",
-                  }}
-                />
-
-                {locationName}
-              </Text>
-            </div>
-          </Col>
-
-          {/* UPDATED */}
-
-          <Col
-            xs={24}
-            sm={12}
-            md={8}
-          >
-            <div>
-              <Text
-                type="secondary"
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                Last Updated
-              </Text>
-
-              <Text strong>
-                {formatUpdatedAt(
-                  emergency.updated_at
-                )}
-              </Text>
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* ===================================================
-          MONITORING AREA
-      =================================================== */}
-
-      <Card
-        title="Monitoring Area"
-        style={{
-          marginBottom: "24px",
-        }}
-      >
-        <Row gutter={[24, 24]}>
-          <Col
-            xs={24}
-            md={12}
-          >
-            <Text type="secondary">
-              Monitoring Node
-            </Text>
-
-            <div style={{ marginTop: "6px" }}>
-              <Text strong>
-                {nodeName}
-              </Text>
-            </div>
-          </Col>
-
-          <Col
-            xs={24}
-            md={6}
-          >
-            <Text type="secondary">
-              Device ID
-            </Text>
-
-            <div style={{ marginTop: "6px" }}>
-              <Text strong>
-                {emergency.device_id ||
-                  "Not available"}
-              </Text>
-            </div>
-          </Col>
-
-          <Col
-            xs={24}
-            md={6}
-          >
-            <Text type="secondary">
-              Node ID
-            </Text>
-
-            <div style={{ marginTop: "6px" }}>
-              <Text strong>
-                {emergency.node_id}
-              </Text>
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* ===================================================
-          CURRENT SITUATION
-      =================================================== */}
-
-      <Card
-        title="Current Situation"
-        style={{
-          marginBottom: "24px",
-        }}
-      >
-        <Paragraph
-          style={{
-            marginBottom: "16px",
-          }}
-        >
-          <Text strong>
-            Affected Area:
-          </Text>{" "}
-          {emergency.affected_area ||
-            "No affected area information available."}
-        </Paragraph>
-
-        <Paragraph
-          style={{
-            marginBottom: 0,
-          }}
-        >
-          <Text strong>
-            Situation:
-          </Text>{" "}
-          {emergency.message ||
-            "No current situation message available."}
-        </Paragraph>
-      </Card>
-
-      {/* ===================================================
-          WHAT YOU SHOULD DO
-      =================================================== */}
-
-      <Card
-        title="What You Should Do"
-        style={{
-          marginBottom: "24px",
-        }}
-      >
-        <List
-          dataSource={[
-            "Stay alert and monitor official flood warnings.",
-            "Avoid travelling through flooded roads or river channels.",
-            "Keep important documents, medicines, and emergency supplies ready.",
-            "Follow instructions from local authorities and emergency services.",
-            "Move to safer or higher ground if conditions deteriorate.",
-          ]}
-          renderItem={(item) => (
-            <List.Item>
-              <Text>
-                • {item}
-              </Text>
-            </List.Item>
-          )}
-        />
-      </Card>
-
-      {/* ===================================================
-          EVACUATION INFORMATION
-      =================================================== */}
-
-      <Card
-        title="Evacuation Information"
-        style={{
-          marginBottom: "24px",
-        }}
-      >
-        <Alert
-          type={
-            emergency.evacuation_required
-              ? "error"
-              : "success"
-          }
-          showIcon
-          message={
-            emergency.evacuation_required
-              ? "Evacuation Required"
-              : "Evacuation Not Currently Required"
-          }
-          description={
-            emergency.evacuation_required
-              ? "Residents in affected areas should follow official evacuation instructions and move to designated safe locations."
-              : "There is currently no evacuation requirement for the monitored area. Continue monitoring official instructions."
-          }
-        />
-
-        {/* SAFE LOCATIONS */}
-
-        {safeLocations.length > 0 && (
-          <div
+        {/* DYNAMIC NODE SELECTOR */}
+        <div style={{ minWidth: 280 }}>
+          <Text
+            strong
             style={{
-              marginTop: "24px",
+              display: "block",
+              marginBottom: 6,
             }}
           >
-            <Text strong>
-              Recommended Safe Locations
-            </Text>
+            Monitoring Node
+          </Text>
 
-            <List
-              size="small"
-              style={{
-                marginTop: "12px",
-              }}
-              dataSource={safeLocations}
-              renderItem={(location) => (
-                <List.Item>
-                  <SafetyOutlined
-                    style={{
-                      marginRight: "10px",
-                    }}
-                  />
+          <Select
+            showSearch
+            value={selectedNodeId}
+            loading={nodesLoading}
+            placeholder="Select a monitoring node"
+            style={{ width: "100%" }}
+            optionFilterProp="children"
+            onChange={handleNodeChange}
+            notFoundContent={
+              nodesLoading ? <Spin size="small" /> : "No nodes found"
+            }
+          >
+            {nodes.map((node) => (
+              <Option key={node.id} value={node.id}>
+                {node.node_name ||
+                  node.location_name ||
+                  node.device_id ||
+                  `Node ${node.id}`}
+              </Option>
+            ))}
+          </Select>
+        </div>
+      </div>
 
-                  {location}
-                </List.Item>
-              )}
+      {/* NODE INFORMATION */}
+      {selectedNode && (
+        <Card
+          size="small"
+          style={{
+            marginBottom: 20,
+            background: "#fafafa",
+          }}
+        >
+          <Row gutter={[24, 12]}>
+            <Col xs={24} sm={12} md={6}>
+              <Text type="secondary">Node</Text>
+              <div>
+                <Text strong>{nodeName}</Text>
+              </div>
+            </Col>
+
+            <Col xs={24} sm={12} md={6}>
+              <Text type="secondary">Device ID</Text>
+              <div>
+                <Text strong>{deviceId}</Text>
+              </div>
+            </Col>
+
+            <Col xs={24} sm={12} md={6}>
+              <Text type="secondary">Location</Text>
+              <div>
+                <Text strong>{locationName}</Text>
+              </div>
+            </Col>
+
+            <Col xs={24} sm={12} md={6}>
+              <Text type="secondary">Database Node ID</Text>
+              <div>
+                <Text strong>{selectedNode.id}</Text>
+              </div>
+            </Col>
+          </Row>
+        </Card>
+      )}
+
+      {/* LOADING */}
+      {emergencyLoading ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            padding: 80,
+          }}
+        >
+          <Spin size="large" />
+        </div>
+      ) : !selectedNodeId ? (
+        <Card>
+          <Empty
+            description={
+              nodesLoading
+                ? "Loading monitoring nodes..."
+                : "Select a monitoring node"
+            }
+          />
+        </Card>
+      ) : !emergency ? (
+        <Card>
+          <Empty
+            description={
+              <>
+                <div>
+                  No emergency information is available for{" "}
+                  <strong>{locationName}</strong>.
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 8,
+                    color: "#888",
+                  }}
+                >
+                  Node ID: {selectedNodeId}
+                </div>
+              </>
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          {/* API ERROR */}
+          {emergencyError && (
+            <Alert
+              type="error"
+              showIcon
+              message="Emergency information error"
+              description={emergencyError}
+              style={{ marginBottom: 20 }}
             />
-          </div>
-        )}
-      </Card>
+          )}
 
-      {/* ===================================================
-          EMERGENCY CONTACTS
-      =================================================== */}
+          {/* ACTIVE EMERGENCY */}
+          {isActiveEmergency && (
+            <Alert
+              type="error"
+              showIcon
+              icon={<ExclamationCircleOutlined />}
+              message="ACTIVE EMERGENCY"
+              description={
+                emergency.message ||
+                "An active emergency has been reported for this monitoring area. Follow official emergency instructions."
+              }
+              style={{
+                marginBottom: 20,
+              }}
+            />
+          )}
 
-      <Card title="Emergency Contacts">
-        <Row gutter={[24, 24]}>
-          <Col
-            xs={24}
-            sm={12}
-            md={8}
+          {/* CURRENT STATUS */}
+          <Card
+            title="Current Emergency Status"
+            style={{ marginBottom: 20 }}
           >
-            <Text type="secondary">
-              Rescue Service
-            </Text>
+            <Row gutter={[24, 24]}>
+              <Col xs={24} md={8}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ fontSize: 28 }}>
+                    {statusConfig.icon}
+                  </div>
 
-            <div style={{ marginTop: "6px" }}>
-              <Text strong>
-                Rescue 1122
-              </Text>
-            </div>
-          </Col>
+                  <div>
+                    <Text type="secondary">
+                      Current Status
+                    </Text>
 
-          <Col
-            xs={24}
-            sm={12}
-            md={8}
+                    <div>
+                      <Tag
+                        color={statusConfig.color}
+                        style={{
+                          fontSize: 15,
+                          padding: "4px 10px",
+                          marginTop: 4,
+                        }}
+                      >
+                        {statusConfig.label}
+                      </Tag>
+                    </div>
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={24} md={8}>
+                <Text type="secondary">Monitoring Area</Text>
+
+                <div
+                  style={{
+                    marginTop: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <EnvironmentOutlined />
+
+                  <Text strong>{locationName}</Text>
+                </div>
+              </Col>
+
+              <Col xs={24} md={8}>
+                <Text type="secondary">Last Updated</Text>
+
+                <div style={{ marginTop: 6 }}>
+                  <Text strong>
+                    {formatDate(
+                      emergency.updated_at ||
+                        emergency.updated_at_db
+                    )}
+                  </Text>
+                </div>
+              </Col>
+            </Row>
+
+            <Alert
+              type={
+                status === "CRITICAL"
+                  ? "error"
+                  : status === "WARNING"
+                  ? "warning"
+                  : status === "WATCH"
+                  ? "info"
+                  : "success"
+              }
+              showIcon
+              message={statusConfig.description}
+              style={{ marginTop: 20 }}
+            />
+          </Card>
+
+          {/* CURRENT SITUATION */}
+          <Row gutter={[20, 20]}>
+            <Col xs={24} lg={12}>
+              <Card title="Current Situation" style={{ height: "100%" }}>
+                <Paragraph style={{ marginBottom: 0 }}>
+                  {emergency.message ||
+                    "No additional emergency message is currently available."}
+                </Paragraph>
+
+                {emergency.affected_area && (
+                  <div style={{ marginTop: 20 }}>
+                    <Text strong>Affected Area</Text>
+
+                    <Paragraph style={{ marginTop: 6 }}>
+                      {emergency.affected_area}
+                    </Paragraph>
+                  </div>
+                )}
+              </Card>
+            </Col>
+
+            {/* WHAT TO DO */}
+            <Col xs={24} lg={12}>
+              <Card title="What You Should Do" style={{ height: "100%" }}>
+                <List
+                  size="small"
+                  dataSource={[
+                    "Monitor official flood warnings and emergency announcements.",
+                    "Keep important documents, medicines, water, and essential supplies ready.",
+                    "Avoid walking or driving through flooded roads or flowing water.",
+                    "Move to higher ground if authorities instruct residents to evacuate.",
+                    "Follow instructions issued by local authorities and emergency services.",
+                  ]}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Text>{item}</Text>
+                    </List.Item>
+                  )}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          {/* EVACUATION */}
+          <Card
+            title="Evacuation Information"
+            style={{ marginTop: 20 }}
           >
-            <Text type="secondary">
-              Police
-            </Text>
+            <Row gutter={[24, 20]}>
+              <Col xs={24} md={12}>
+                <Text type="secondary">
+                  Active Emergency
+                </Text>
 
-            <div style={{ marginTop: "6px" }}>
-              <Text strong>
-                15
-              </Text>
-            </div>
-          </Col>
+                <div style={{ marginTop: 8 }}>
+                  <Tag color={isActiveEmergency ? "red" : "green"}>
+                    {isActiveEmergency ? "YES" : "NO"}
+                  </Tag>
+                </div>
+              </Col>
 
-          <Col
-            xs={24}
-            sm={12}
-            md={8}
+              <Col xs={24} md={12}>
+                <Text type="secondary">
+                  Evacuation Required
+                </Text>
+
+                <div style={{ marginTop: 8 }}>
+                  <Tag color={evacuationRequired ? "red" : "green"}>
+                    {evacuationRequired ? "YES" : "NO"}
+                  </Tag>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+
+          {/* SAFE LOCATIONS */}
+          <Card
+            title="Safe Locations"
+            style={{ marginTop: 20 }}
           >
-            <Text type="secondary">
-              Emergency Medical Assistance
-            </Text>
+            {safeLocations.length > 0 ? (
+              <List
+                bordered
+                dataSource={safeLocations}
+                renderItem={(location, index) => (
+                  <List.Item>
+                    <Text>
+                      {index + 1}. {location}
+                    </Text>
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="No safe locations have been configured."
+              />
+            )}
+          </Card>
 
-            <div style={{ marginTop: "6px" }}>
-              <Text strong>
-                1122
-              </Text>
-            </div>
-          </Col>
-        </Row>
-      </Card>
+          {/* EMERGENCY CONTACTS */}
+          <Card
+            title="Emergency Contacts"
+            style={{ marginTop: 20 }}
+          >
+            <Row gutter={[20, 20]}>
+              <Col xs={24} sm={12} md={8}>
+                <Card size="small">
+                  <Text type="secondary">
+                    Rescue / Emergency
+                  </Text>
+
+                  <Title level={4} style={{ margin: "6px 0 0" }}>
+                    1122
+                  </Title>
+                </Card>
+              </Col>
+
+              <Col xs={24} sm={12} md={8}>
+                <Card size="small">
+                  <Text type="secondary">
+                    Police
+                  </Text>
+
+                  <Title level={4} style={{ margin: "6px 0 0" }}>
+                    15
+                  </Title>
+                </Card>
+              </Col>
+
+              <Col xs={24} sm={12} md={8}>
+                <Card size="small">
+                  <Text type="secondary">
+                    Emergency Services
+                  </Text>
+
+                  <Title level={4} style={{ margin: "6px 0 0" }}>
+                    Contact local authorities
+                  </Title>
+                </Card>
+              </Col>
+            </Row>
+          </Card>
+        </>
+      )}
     </div>
   );
 };
