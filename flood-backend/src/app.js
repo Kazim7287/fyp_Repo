@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -6,6 +7,12 @@ const path = require("path");
 require("dotenv").config();
 
 const pool = require("./config/db");
+
+// =========================================================
+// INFLUXDB
+// =========================================================
+
+const { influxQueryApi } = require("../influxdb");
 
 // =========================================================
 // ROUTES
@@ -61,6 +68,12 @@ const faqRoutes = require("./routes/faq.routes");
 const emergencyRoutes = require("./routes/emergency.routes");
 
 // =========================================================
+// ENVIRONMENTAL DATA ROUTES
+// =========================================================
+
+const environmentalRoutes = require("./routes/environmental.routes");
+
+// =========================================================
 // EXPRESS APP
 // =========================================================
 
@@ -93,8 +106,7 @@ const allowedOrigins = [
 // ---------------------------------------------------------
 
 if (process.env.FRONTEND_URL) {
-  const frontendUrl =
-    process.env.FRONTEND_URL.trim();
+  const frontendUrl = process.env.FRONTEND_URL.trim();
 
   if (
     frontendUrl &&
@@ -189,30 +201,21 @@ app.use(
 // =========================================================
 // COOKIE PARSER
 // =========================================================
-//
-// Required for JWT authentication because the access token
-// is stored inside an HTTP-only cookie.
-//
-// =========================================================
 
 app.use(cookieParser());
 
 // =========================================================
 // STATIC UPLOADS
 // =========================================================
-//
-// Makes uploaded files available through:
-//
-// /uploads/blogs/...
-// /uploads/research/images/...
-// /uploads/research/pdfs/...
-//
-// =========================================================
 
 app.use(
   "/uploads",
   express.static(
-    path.join(__dirname, "..", "uploads")
+    path.join(
+      __dirname,
+      "..",
+      "uploads"
+    )
   )
 );
 
@@ -220,57 +223,142 @@ app.use(
 // HEALTH CHECK
 // =========================================================
 
-app.get("/", (req, res) => {
-  return res.status(200).json({
-    success: true,
-    message:
-      "Flood Forecasting API is running",
-  });
-});
+app.get(
+  "/",
+  (req, res) => {
+    return res.status(200).json({
+      success: true,
+      message: "Flood Forecasting API is running",
+    });
+  }
+);
 
 // =========================================================
 // DATABASE TEST
 // =========================================================
 
-app.get("/db-test", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT NOW() AS current_time"
-    );
+app.get(
+  "/db-test",
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        "SELECT NOW() AS current_time"
+      );
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "PostgreSQL connected successfully",
-      time: result.rows[0].current_time,
-    });
-  } catch (error) {
-    console.error(
-      "❌ Database test failed:",
-      error
-    );
+      return res.status(200).json({
+        success: true,
+        message:
+          "PostgreSQL connected successfully",
+        time:
+          result.rows[0].current_time,
+      });
+    } catch (error) {
+      console.error(
+        "❌ Database test failed:",
+        error
+      );
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "PostgreSQL connection failed",
+      return res.status(500).json({
+        success: false,
+        message:
+          "PostgreSQL connection failed",
 
-      ...(process.env.NODE_ENV !==
-        "production" && {
-        error: error.message,
-      }),
-    });
+        ...(process.env.NODE_ENV !==
+          "production" && {
+          error: error.message,
+        }),
+      });
+    }
   }
-});
+);
+
+// =========================================================
+// INFLUXDB CONNECTION TEST
+// =========================================================
+//
+// Temporary endpoint for testing the InfluxDB Cloud
+// configuration.
+//
+// =========================================================
+
+app.get(
+  "/influxdb-test",
+  async (req, res) => {
+    try {
+      if (
+        !process.env.INFLUXDB_URL ||
+        !process.env.INFLUXDB_TOKEN ||
+        !process.env.INFLUXDB_ORG ||
+        !process.env.INFLUXDB_BUCKET
+      ) {
+        return res.status(500).json({
+          success: false,
+          message:
+            "InfluxDB environment variables are missing",
+        });
+      }
+
+      const query =
+        `from(bucket: "${process.env.INFLUXDB_BUCKET}") ` +
+        `|> range(start: -1m) ` +
+        `|> limit(n: 1)`;
+
+      let foundData = false;
+
+      await new Promise(
+        (resolve, reject) => {
+          influxQueryApi.queryRows(
+            query,
+            {
+              next(row, tableMeta) {
+                foundData = true;
+              },
+
+              error(error) {
+                reject(error);
+              },
+
+              complete() {
+                resolve();
+              },
+            }
+          );
+        }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "InfluxDB connection successful",
+        bucket:
+          process.env.INFLUXDB_BUCKET,
+        organization:
+          process.env.INFLUXDB_ORG,
+        dataFound:
+          foundData,
+      });
+    } catch (error) {
+      console.error(
+        "❌ InfluxDB test failed:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "InfluxDB connection failed",
+
+        ...(process.env.NODE_ENV !==
+          "production" && {
+          error: error.message,
+        }),
+      });
+    }
+  }
+);
 
 // =========================================================
 // AUTH ROUTES
-// =========================================================
-//
-// POST   /api/auth/login
-// POST   /api/auth/register
-// etc.
-//
 // =========================================================
 
 app.use(
@@ -281,12 +369,6 @@ app.use(
 // =========================================================
 // USER ROUTES
 // =========================================================
-//
-// GET    /api/users
-// GET    /api/users/:id
-// etc.
-//
-// =========================================================
 
 app.use(
   "/api/users",
@@ -295,10 +377,6 @@ app.use(
 
 // =========================================================
 // ADMIN ROUTES
-// =========================================================
-//
-// Admin-related endpoints
-//
 // =========================================================
 
 app.use(
@@ -309,10 +387,6 @@ app.use(
 // =========================================================
 // SENSOR ROUTES
 // =========================================================
-//
-// Sensor-related endpoints
-//
-// =========================================================
 
 app.use(
   "/api/sensors",
@@ -321,10 +395,6 @@ app.use(
 
 // =========================================================
 // COMPONENT LIBRARY ROUTES
-// =========================================================
-//
-// Component management endpoints
-//
 // =========================================================
 
 app.use(
@@ -335,10 +405,6 @@ app.use(
 // =========================================================
 // NODE / IOT INFRASTRUCTURE ROUTES
 // =========================================================
-//
-// IoT node management endpoints
-//
-// =========================================================
 
 app.use(
   "/api/nodes",
@@ -347,14 +413,6 @@ app.use(
 
 // =========================================================
 // ALERT MANAGEMENT ROUTES
-// =========================================================
-//
-// GET    /api/alerts
-// GET    /api/alerts/:id
-// POST   /api/alerts
-// PATCH  /api/alerts/:id/acknowledge
-// PATCH  /api/alerts/:id/resolve
-//
 // =========================================================
 
 app.use(
@@ -365,17 +423,6 @@ app.use(
 // =========================================================
 // BLOG MANAGEMENT ROUTES
 // =========================================================
-//
-// GET    /api/blogs
-// GET    /api/blogs/stats
-// GET    /api/blogs/:id
-// POST   /api/blogs
-// PUT    /api/blogs/:id
-// DELETE /api/blogs/:id
-// PATCH  /api/blogs/:id/toggle-publish
-// PATCH  /api/blogs/:id/views
-//
-// =========================================================
 
 app.use(
   "/api/blogs",
@@ -384,17 +431,6 @@ app.use(
 
 // =========================================================
 // RESEARCH MANAGEMENT ROUTES
-// =========================================================
-//
-// GET    /api/research
-// GET    /api/research/stats
-// GET    /api/research/:id
-// POST   /api/research
-// PUT    /api/research/:id
-// POST   /api/research/:id/pdf
-// PATCH  /api/research/:id/toggle-status
-// DELETE /api/research/:id
-//
 // =========================================================
 
 app.use(
@@ -405,16 +441,6 @@ app.use(
 // =========================================================
 // ANNOUNCEMENT MANAGEMENT ROUTES
 // =========================================================
-//
-// GET    /api/announcements
-// GET    /api/announcements/stats
-// GET    /api/announcements/:id
-// POST   /api/announcements
-// PUT    /api/announcements/:id
-// DELETE /api/announcements/:id
-// PATCH  /api/announcements/:id/status
-//
-// =========================================================
 
 app.use(
   "/api/announcements",
@@ -423,17 +449,6 @@ app.use(
 
 // =========================================================
 // NEWS MANAGEMENT ROUTES
-// =========================================================
-//
-// GET    /api/news
-// GET    /api/news/stats
-// GET    /api/news/:id
-// POST   /api/news
-// PUT    /api/news/:id
-// DELETE /api/news/:id
-// PATCH  /api/news/:id/status
-// PATCH  /api/news/:id/featured
-//
 // =========================================================
 
 app.use(
@@ -444,17 +459,6 @@ app.use(
 // =========================================================
 // FAQ MANAGEMENT ROUTES
 // =========================================================
-//
-// GET    /api/faqs
-// GET    /api/faqs/stats
-// GET    /api/faqs/:id
-// POST   /api/faqs
-// PUT    /api/faqs/:id
-// DELETE /api/faqs/:id
-// PATCH  /api/faqs/:id/status
-// PATCH  /api/faqs/:id/featured
-//
-// =========================================================
 
 app.use(
   "/api/faqs",
@@ -464,25 +468,6 @@ app.use(
 // =========================================================
 // EMERGENCY INFORMATION ROUTES
 // =========================================================
-//
-// PUBLIC:
-//
-// GET    /api/emergency-information
-// GET    /api/emergency-information/:id
-//
-// ADMIN:
-//
-// POST   /api/emergency-information
-// PUT    /api/emergency-information/:id
-// DELETE /api/emergency-information/:id
-//
-// Query examples:
-//
-// GET /api/emergency-information?node_id=2
-// GET /api/emergency-information?status=WATCH
-// GET /api/emergency-information?active_emergency=true
-//
-// =========================================================
 
 app.use(
   "/api/emergency-information",
@@ -490,28 +475,45 @@ app.use(
 );
 
 // =========================================================
+// ENVIRONMENTAL DATA ROUTES
+// =========================================================
+//
+// React EnvironmentalData page will use:
+//
+// POST /api/environmental-data
+//
+// =========================================================
+
+app.use(
+  "/api/environmental-data",
+  environmentalRoutes
+);
+
+// =========================================================
 // 404 HANDLER
 // =========================================================
-//
-// This must remain AFTER all API routes.
-//
-// =========================================================
 
-app.use((req, res) => {
-  return res.status(404).json({
-    success: false,
-
-    message:
-      `Route ${req.method} ${req.originalUrl} not found`,
-  });
-});
+app.use(
+  (req, res) => {
+    return res.status(404).json({
+      success: false,
+      message:
+        `Route ${req.method} ${req.originalUrl} not found`,
+    });
+  }
+);
 
 // =========================================================
 // GLOBAL ERROR HANDLER
 // =========================================================
 
 app.use(
-  (err, req, res, next) => {
+  (
+    err,
+    req,
+    res,
+    next
+  ) => {
     console.error(
       "❌ Server error:",
       err
@@ -541,7 +543,9 @@ app.use(
       err.statusCode ||
       500;
 
-    return res.status(statusCode).json({
+    return res.status(
+      statusCode
+    ).json({
       success: false,
 
       message:

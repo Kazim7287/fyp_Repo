@@ -1,8 +1,13 @@
-const { InfluxDBClient } = require("@influxdata/influxdb3-client");
+const { InfluxDB } = require("@influxdata/influxdb-client");
 
-const influxClient = new InfluxDBClient({
-  host: process.env.INFLUX_URL,
-  token: process.env.INFLUX_TOKEN
+const influxDB = new InfluxDB({
+  url: process.env.INFLUXDB_URL,
+  token: process.env.INFLUXDB_TOKEN,
 });
 
-module.exports = influxClient;
+const influxQueryApi = influxDB.getQueryApi(process.env.INFLUXDB_ORG);
+
+module.exports = {
+  influxDB,
+  influxQueryApi,
+};

@@ -16,6 +16,7 @@ import {
   Select,
   Button,
   Divider,
+  message,
 } from "antd";
 
 import {
@@ -26,13 +27,14 @@ import {
   EnvironmentOutlined,
   ReloadOutlined,
   SearchOutlined,
+  DatabaseOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
 
 /*
 |--------------------------------------------------------------------------
-| API URLs
+| External APIs
 |--------------------------------------------------------------------------
 */
 
@@ -44,11 +46,26 @@ const GEOCODING_API =
 
 /*
 |--------------------------------------------------------------------------
-| Default Location
+| Backend API
 |--------------------------------------------------------------------------
 |
-| Nowshera is used when the page is opened for the first time.
+| Using /api allows this to work with:
 |
+| Development:
+| http://localhost:5000/api
+|
+| Production:
+| https://floodforecast.duckdns.org/api
+|
+*/
+
+const ENVIRONMENTAL_DATA_API =
+  "/api/environmental-data";
+
+/*
+|--------------------------------------------------------------------------
+| Default Location
+|--------------------------------------------------------------------------
 */
 
 const DEFAULT_LOCATION = {
@@ -103,6 +120,9 @@ const EnvironmentalData = () => {
   const [searchLoading, setSearchLoading] =
     useState(false);
 
+  const [savingData, setSavingData] =
+    useState(false);
+
   /*
   |--------------------------------------------------------------------------
   | Error State
@@ -118,9 +138,7 @@ const EnvironmentalData = () => {
   |--------------------------------------------------------------------------
   */
 
-  const searchLocations = async (
-    value
-  ) => {
+  const searchLocations = async (value) => {
     if (!value || value.trim().length < 2) {
       setLocations([]);
       return;
@@ -129,18 +147,17 @@ const EnvironmentalData = () => {
     try {
       setSearchLoading(true);
 
-      const response =
-        await axios.get(
-          GEOCODING_API,
-          {
-            params: {
-              name: value.trim(),
-              count: 10,
-              language: "en",
-              format: "json",
-            },
-          }
-        );
+      const response = await axios.get(
+        GEOCODING_API,
+        {
+          params: {
+            name: value.trim(),
+            count: 10,
+            language: "en",
+            format: "json",
+          },
+        }
+      );
 
       const results =
         response.data?.results || [];
@@ -155,6 +172,112 @@ const EnvironmentalData = () => {
       setLocations([]);
     } finally {
       setSearchLoading(false);
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Save Environmental Data
+  |--------------------------------------------------------------------------
+  |
+  | React
+  |   ↓
+  | Backend API
+  |   ↓
+  | InfluxDB Cloud
+  |
+  */
+
+  const saveEnvironmentalData = async (
+    weatherData,
+    selectedLocation
+  ) => {
+    try {
+      const current =
+        weatherData?.current;
+
+      if (!current) {
+        return;
+      }
+
+      const payload = {
+        location:
+          selectedLocation.name,
+
+        latitude:
+          Number(
+            selectedLocation.latitude
+          ),
+
+        longitude:
+          Number(
+            selectedLocation.longitude
+          ),
+
+        temperature:
+          current.temperature_2m != null
+            ? Number(
+                current.temperature_2m
+              )
+            : null,
+
+        humidity:
+          current.relative_humidity_2m != null
+            ? Number(
+                current.relative_humidity_2m
+              )
+            : null,
+
+        rainfall:
+          current.rain != null
+            ? Number(current.rain)
+            : current.precipitation != null
+            ? Number(
+                current.precipitation
+              )
+            : null,
+
+        soil_moisture:
+          current.soil_moisture_0_to_7cm != null
+            ? Number(
+                current.soil_moisture_0_to_7cm
+              )
+            : null,
+
+        wind_speed:
+          current.wind_speed_10m != null
+            ? Number(
+                current.wind_speed_10m
+              )
+            : null,
+      };
+
+      setSavingData(true);
+
+      const response = await axios.post(
+        ENVIRONMENTAL_DATA_API,
+        payload,
+        {
+          withCredentials: true,
+        }
+      );
+
+      if (response.data?.success) {
+        console.log(
+          "Environmental data saved to InfluxDB Cloud"
+        );
+      }
+    } catch (err) {
+      console.error(
+        "Failed to save environmental data:",
+        err
+      );
+
+      message.warning(
+        "Weather loaded, but environmental data could not be saved."
+      );
+    } finally {
+      setSavingData(false);
     }
   };
 
@@ -197,8 +320,7 @@ const EnvironmentalData = () => {
                 "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m,soil_moisture_0_to_7cm",
 
               /*
-              | Timezone automatically follows
-              | selected location.
+              | Timezone
               */
 
               timezone:
@@ -220,8 +342,22 @@ const EnvironmentalData = () => {
           }
         );
 
+      const weatherData =
+        response.data;
+
       setWeather(
-        response.data
+        weatherData
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Save Current Environmental Data
+      |--------------------------------------------------------------------------
+      */
+
+      await saveEnvironmentalData(
+        weatherData,
+        selectedLocation
       );
     } catch (err) {
       console.error(
@@ -244,7 +380,9 @@ const EnvironmentalData = () => {
   */
 
   useEffect(() => {
-    fetchWeather();
+    fetchWeather(
+      DEFAULT_LOCATION
+    );
   }, []);
 
   /*
@@ -257,13 +395,17 @@ const EnvironmentalData = () => {
     const interval =
       setInterval(
         () => {
-          fetchWeather(location);
+          fetchWeather(
+            location
+          );
         },
         5 * 60 * 1000
       );
 
     return () => {
-      clearInterval(interval);
+      clearInterval(
+        interval
+      );
     };
   }, [location]);
 
@@ -452,17 +594,21 @@ const EnvironmentalData = () => {
 
     /*
     | Soil Moisture
+    |
+    | Open-Meteo returns m³/m³.
+    | Example:
+    | 0.32 = 32%
     */
 
     if (
       parameter ===
       "Soil Moisture"
     ) {
-      if (value >= 80) {
+      if (value >= 0.40) {
         return "High";
       }
 
-      if (value >= 50) {
+      if (value >= 0.25) {
         return "Moderate";
       }
 
@@ -814,9 +960,10 @@ const EnvironmentalData = () => {
         <Text type="secondary">
           Monitor real-time
           environmental
-          conditions for
-          any selected
-          location.
+          conditions and
+          automatically store
+          measurements in
+          InfluxDB Cloud.
         </Text>
       </div>
 
@@ -993,6 +1140,21 @@ const EnvironmentalData = () => {
             Live
           </Tag>
 
+          <Tag
+            color={
+              savingData
+                ? "processing"
+                : "success"
+            }
+            icon={
+              <DatabaseOutlined />
+            }
+          >
+            {savingData
+              ? "Saving to Cloud..."
+              : "Stored in InfluxDB Cloud"}
+          </Tag>
+
           <Button
             icon={
               <ReloadOutlined />
@@ -1045,9 +1207,7 @@ const EnvironmentalData = () => {
               }
             />
 
-            <Text
-              type="secondary"
-            >
+            <Text type="secondary">
               Current precipitation
             </Text>
           </Card>
@@ -1074,9 +1234,7 @@ const EnvironmentalData = () => {
               }
             />
 
-            <Text
-              type="secondary"
-            >
+            <Text type="secondary">
               2 m above ground
             </Text>
           </Card>
@@ -1103,9 +1261,7 @@ const EnvironmentalData = () => {
               }
             />
 
-            <Text
-              type="secondary"
-            >
+            <Text type="secondary">
               Relative humidity
             </Text>
           </Card>
@@ -1132,9 +1288,7 @@ const EnvironmentalData = () => {
               }
             />
 
-            <Text
-              type="secondary"
-            >
+            <Text type="secondary">
               10 m above ground
             </Text>
           </Card>
@@ -1178,20 +1332,36 @@ const EnvironmentalData = () => {
       </Card>
 
       {/* ================================================= */}
-      {/* DATA SOURCE */}
+      {/* DATA STORAGE INFORMATION */}
       {/* ================================================= */}
 
       <Divider />
 
-      <Text
-        type="secondary"
+      <Space
+        direction="vertical"
+        size={4}
       >
-        Environmental data
-        provided by Open-Meteo.
-        Location coordinates
-        are obtained through
-        Open-Meteo geocoding.
-      </Text>
+        <Text type="secondary">
+          Environmental data
+          provided by
+          Open-Meteo.
+        </Text>
+
+        <Text type="secondary">
+          Current measurements
+          are automatically
+          stored in InfluxDB
+          Cloud through the
+          Flood Forecasting
+          backend.
+        </Text>
+
+        <Text type="secondary">
+          Location coordinates
+          are obtained through
+          Open-Meteo geocoding.
+        </Text>
+      </Space>
     </div>
   );
 };
