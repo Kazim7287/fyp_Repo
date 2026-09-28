@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -21,7 +20,9 @@ const { influxQueryApi } = require("../influxdb");
 const authRoutes = require("./routes/auth.routes");
 const usersRoutes = require("./routes/users.routes");
 const adminRoutes = require("./routes/admin.routes");
+
 const sensorRoutes = require("./routes/sensor.routes");
+
 const componentRoutes = require("./routes/component.routes");
 const nodeRoutes = require("./routes/nodeRoutes");
 
@@ -164,15 +165,7 @@ app.use(
       );
     },
 
-    // -----------------------------------------------------
-    // Allow HTTP-only authentication cookies
-    // -----------------------------------------------------
-
     credentials: true,
-
-    // -----------------------------------------------------
-    // Allowed HTTP methods
-    // -----------------------------------------------------
 
     methods: [
       "GET",
@@ -182,10 +175,6 @@ app.use(
       "DELETE",
       "OPTIONS",
     ],
-
-    // -----------------------------------------------------
-    // Allowed request headers
-    // -----------------------------------------------------
 
     allowedHeaders: [
       "Content-Type",
@@ -291,6 +280,10 @@ app.get(
   "/influxdb-test",
   async (req, res) => {
     try {
+      // ---------------------------------------------------
+      // Validate environment variables
+      // ---------------------------------------------------
+
       if (
         !process.env.INFLUXDB_URL ||
         !process.env.INFLUXDB_TOKEN ||
@@ -303,6 +296,10 @@ app.get(
             "InfluxDB environment variables are missing",
         });
       }
+
+      // ---------------------------------------------------
+      // Simple InfluxDB query
+      // ---------------------------------------------------
 
       const query =
         `from(bucket: "${process.env.INFLUXDB_BUCKET}") ` +
@@ -334,12 +331,16 @@ app.get(
 
       return res.status(200).json({
         success: true,
+
         message:
           "InfluxDB connection successful",
+
         bucket:
           process.env.INFLUXDB_BUCKET,
+
         organization:
           process.env.INFLUXDB_ORG,
+
         dataFound:
           foundData,
       });
@@ -351,6 +352,7 @@ app.get(
 
       return res.status(500).json({
         success: false,
+
         message:
           "InfluxDB connection failed",
 
@@ -360,6 +362,21 @@ app.get(
         }),
       });
     }
+  }
+);
+
+// =========================================================
+// SENSOR API HEALTH CHECK
+// =========================================================
+
+app.get(
+  "/api/sensors/health",
+  (req, res) => {
+    return res.status(200).json({
+      success: true,
+      message:
+        "Sensor API is running",
+    });
   }
 );
 
@@ -484,8 +501,6 @@ app.use(
 // ENVIRONMENTAL DATA ROUTES
 // =========================================================
 //
-// React EnvironmentalData page:
-//
 // POST /api/environmental-data
 //
 // =========================================================
@@ -500,15 +515,12 @@ app.use(
 // =========================================================
 //
 // JSON:
-//
 // GET /api/environmental-data/export/json
 //
 // Excel:
-//
 // GET /api/environmental-data/export/excel
 //
 // PDF:
-//
 // GET /api/environmental-data/export/pdf
 //
 // =========================================================
@@ -526,6 +538,7 @@ app.use(
   (req, res) => {
     return res.status(404).json({
       success: false,
+
       message:
         `Route ${req.method} ${req.originalUrl} not found`,
     });
