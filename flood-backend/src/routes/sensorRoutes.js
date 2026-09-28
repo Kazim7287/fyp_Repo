@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const {
@@ -11,6 +12,7 @@ const sensorController = require("../controllers/sensor.controller");
 // Tolthawk sensor controller
 const {
   getSensorData,
+  getRiverLevelData,
 } = require("../controllers/sensorController");
 
 const router = express.Router();
@@ -33,6 +35,15 @@ router.post(
 router.get(
   "/data",
   getSensorData
+);
+
+// =========================================================
+// GET RIVER LEVEL DATA FROM INFLUXDB
+// =========================================================
+
+router.get(
+  "/river-level",
+  getRiverLevelData
 );
 
 // =========================================================
