@@ -4,7 +4,7 @@ const {
 
 const {
   writeRiverLevelReadings,
-} = require("../services/influxService");
+} = require("../services/influxdb.service");
 
 // ============================================================
 // GET SENSOR DATA
