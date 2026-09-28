@@ -1,3 +1,4 @@
+
 const {
   InfluxDB,
   Point,
@@ -16,6 +17,10 @@ const writeApi = influxDB.getWriteApi(
   process.env.INFLUXDB_ORG,
   process.env.INFLUXDB_BUCKET,
   "ms"
+);
+
+const queryApi = influxDB.getQueryApi(
+  process.env.INFLUXDB_ORG
 );
 
 // ============================================================
@@ -53,7 +58,10 @@ const writeEnvironmentalData = async ({
         "soil_moisture",
         Number(soilMoisture)
       )
-      .floatField("wind_speed", Number(windSpeed));
+      .floatField(
+        "wind_speed",
+        Number(windSpeed)
+      );
 
     // --------------------------------------------------------
     // Timestamp
@@ -117,6 +125,25 @@ const writeRiverLevelData = async ({
     }
 
     // --------------------------------------------------------
+    // Validate numeric values
+    // --------------------------------------------------------
+
+    const numericLevel = Number(level);
+    const numericTimestamp = Number(timestamp);
+
+    if (Number.isNaN(numericLevel)) {
+      throw new Error(
+        "River level must be a valid number."
+      );
+    }
+
+    if (Number.isNaN(numericTimestamp)) {
+      throw new Error(
+        "Timestamp must be a valid number."
+      );
+    }
+
+    // --------------------------------------------------------
     // Create InfluxDB point
     // --------------------------------------------------------
 
@@ -139,7 +166,7 @@ const writeRiverLevelData = async ({
       )
       .floatField(
         "level",
-        Number(level)
+        numericLevel
       );
 
     // --------------------------------------------------------
@@ -163,7 +190,7 @@ const writeRiverLevelData = async ({
     // --------------------------------------------------------
 
     point.timestamp(
-      new Date(Number(timestamp))
+      new Date(numericTimestamp)
     );
 
     // --------------------------------------------------------
@@ -242,6 +269,26 @@ const writeRiverLevelReadings = async (
         continue;
       }
 
+      const numericLevel = Number(
+        reading.level
+      );
+
+      const numericTimestamp = Number(
+        reading.timestamp
+      );
+
+      if (
+        Number.isNaN(numericLevel) ||
+        Number.isNaN(numericTimestamp)
+      ) {
+        console.warn(
+          "Skipping invalid numeric river reading:",
+          reading
+        );
+
+        continue;
+      }
+
       // ------------------------------------------------------
       // Create point
       // ------------------------------------------------------
@@ -269,7 +316,7 @@ const writeRiverLevelReadings = async (
         )
         .floatField(
           "level",
-          Number(reading.level)
+          numericLevel
         );
 
       // ------------------------------------------------------
@@ -294,9 +341,7 @@ const writeRiverLevelReadings = async (
       // ------------------------------------------------------
 
       point.timestamp(
-        new Date(
-          Number(reading.timestamp)
-        )
+        new Date(numericTimestamp)
       );
 
       // ------------------------------------------------------
@@ -344,6 +389,154 @@ const writeRiverLevelReadings = async (
 };
 
 // ============================================================
+// QUERY RIVER LEVEL READINGS
+// ============================================================
+
+const queryRiverLevelReadings = async ({
+  locationId = 868,
+  start = "-7d",
+  stop = "now()",
+  limit = 5000,
+} = {}) => {
+  try {
+    // --------------------------------------------------------
+    // Validate location ID
+    // --------------------------------------------------------
+
+    const parsedLocationId = Number(
+      locationId
+    );
+
+    if (
+      !Number.isInteger(parsedLocationId) ||
+      parsedLocationId <= 0
+    ) {
+      throw new Error(
+        "locationId must be a valid positive number."
+      );
+    }
+
+    // --------------------------------------------------------
+    // Validate limit
+    // --------------------------------------------------------
+
+    const parsedLimit = Number(limit);
+
+    if (
+      !Number.isInteger(parsedLimit) ||
+      parsedLimit <= 0
+    ) {
+      throw new Error(
+        "limit must be a valid positive number."
+      );
+    }
+
+    // --------------------------------------------------------
+    // Build Flux query
+    // --------------------------------------------------------
+
+    const fluxQuery = `
+      from(bucket: "${process.env.INFLUXDB_BUCKET}")
+        |> range(
+          start: ${start},
+          stop: ${stop}
+        )
+        |> filter(
+          fn: (r) =>
+            r._measurement == "river_level"
+        )
+        |> filter(
+          fn: (r) =>
+            r.location_id == "${parsedLocationId}"
+        )
+        |> filter(
+          fn: (r) =>
+            r._field == "level"
+        )
+        |> sort(
+          columns: ["_time"],
+          desc: false
+        )
+        |> limit(
+          n: ${parsedLimit}
+        )
+    `;
+
+    // --------------------------------------------------------
+    // Execute query
+    // --------------------------------------------------------
+
+    const rows = [];
+
+    await new Promise((resolve, reject) => {
+      queryApi.queryRows(
+        fluxQuery,
+        {
+          next(row, tableMeta) {
+            const data =
+              tableMeta.toObject(row);
+
+            rows.push({
+              timestamp: new Date(
+                data._time
+              ).getTime(),
+
+              level: Number(
+                data._value
+              ),
+
+              locationId: Number(
+                data.location_id
+              ),
+
+              locationName:
+                data.location_name || "",
+
+              sensorId: Number(
+                data.sensor_id
+              ),
+
+              sensorType:
+                data.sensor_type || "",
+
+              unit: "ft",
+            });
+          },
+
+          error(error) {
+            reject(error);
+          },
+
+          complete() {
+            resolve();
+          },
+        }
+      );
+    });
+
+    // --------------------------------------------------------
+    // Return results
+    // --------------------------------------------------------
+
+    return {
+      success: true,
+      count: rows.length,
+      readings: rows,
+    };
+  } catch (error) {
+    console.error(
+      "InfluxDB River Level Query Error:",
+      error.message
+    );
+
+    throw new Error(
+      error.message ||
+        "Failed to query river level data."
+    );
+  }
+};
+
+// ============================================================
 // EXPORTS
 // ============================================================
 
@@ -351,4 +544,5 @@ module.exports = {
   writeEnvironmentalData,
   writeRiverLevelData,
   writeRiverLevelReadings,
+  queryRiverLevelReadings,
 };
