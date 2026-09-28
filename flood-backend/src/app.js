@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -21,7 +22,11 @@ const authRoutes = require("./routes/auth.routes");
 const usersRoutes = require("./routes/users.routes");
 const adminRoutes = require("./routes/admin.routes");
 
+// Existing sensor routes
 const sensorRoutes = require("./routes/sensor.routes");
+
+// Tolthawk sensor routes
+const sensorRoutesNew = require("./routes/sensorRoutes");
 
 const componentRoutes = require("./routes/component.routes");
 const nodeRoutes = require("./routes/nodeRoutes");
@@ -110,9 +115,9 @@ const allowedOrigins = [
   "http://floodforecast.duckdns.org",
 ];
 
-// ---------------------------------------------------------
-// Add FRONTEND_URL from .env
-// ---------------------------------------------------------
+// =========================================================
+// ADD FRONTEND_URL FROM .ENV
+// =========================================================
 
 if (process.env.FRONTEND_URL) {
   const frontendUrl =
@@ -135,7 +140,7 @@ app.use(
     origin: (origin, callback) => {
       // ---------------------------------------------------
       // Requests without Origin
-      // Postman, curl, server-to-server, etc.
+      // curl, Postman, server-to-server, etc.
       // ---------------------------------------------------
 
       if (!origin) {
@@ -218,7 +223,7 @@ app.use(
 );
 
 // =========================================================
-// HEALTH CHECK
+// ROOT HEALTH CHECK
 // =========================================================
 
 app.get(
@@ -410,10 +415,37 @@ app.use(
 // =========================================================
 // SENSOR ROUTES
 // =========================================================
+//
+// Existing:
+//
+// POST /api/sensors/
+//
+// from:
+// sensor.routes.js
+//
+// =========================================================
 
 app.use(
   "/api/sensors",
   sensorRoutes
+);
+
+// =========================================================
+// TOLTHAWK SENSOR ROUTES
+// =========================================================
+//
+// Tolthawk:
+//
+// GET /api/sensors/data
+//
+// from:
+// sensorRoutes.js
+//
+// =========================================================
+
+app.use(
+  "/api/sensors",
+  sensorRoutesNew
 );
 
 // =========================================================
@@ -500,10 +532,6 @@ app.use(
 // =========================================================
 // ENVIRONMENTAL DATA ROUTES
 // =========================================================
-//
-// POST /api/environmental-data
-//
-// =========================================================
 
 app.use(
   "/api/environmental-data",
@@ -512,17 +540,6 @@ app.use(
 
 // =========================================================
 // ENVIRONMENTAL DATA EXPORT ROUTES
-// =========================================================
-//
-// JSON:
-// GET /api/environmental-data/export/json
-//
-// Excel:
-// GET /api/environmental-data/export/excel
-//
-// PDF:
-// GET /api/environmental-data/export/pdf
-//
 // =========================================================
 
 app.use(
