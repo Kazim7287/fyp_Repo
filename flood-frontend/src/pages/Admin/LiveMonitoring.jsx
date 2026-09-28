@@ -31,7 +31,7 @@ import { useNavigate } from "react-router-dom";
 
 import {
   fetchRiverLevelData,
-} from "../store/slices/riverLevelSlice";
+} from "../../../store/slices/riverLevelSlice";
 
 const { Title, Text } = Typography;
 
