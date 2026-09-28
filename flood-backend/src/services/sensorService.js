@@ -2,9 +2,7 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { CookieJar } = require("tough-cookie");
-const {
-  wrapper,
-} = require("axios-cookiejar-support");
+const { wrapper } = require("axios-cookiejar-support");
 
 // ============================================================
 // TOLTHAWK CONFIGURATION
@@ -16,11 +14,14 @@ const TOLTHAWK_BASE_URL =
 const TOLTHAWK_LOGIN_URL =
   `${TOLTHAWK_BASE_URL}/Account/Login`;
 
-const TOLTHAWK_SENSOR_URL =
+const TOLTHAWK_DASHBOARD_URL =
+  `${TOLTHAWK_BASE_URL}/Dashboard/Index`;
+
+const TOLTHAWK_SENSOR_API =
   `${TOLTHAWK_BASE_URL}/api/SynchronizedCharts/GetSynchronizedCharts`;
 
 // ============================================================
-// CREATE AUTHENTICATED TOLTHAWK CLIENT
+// CREATE TOLTHAWK CLIENT
 // ============================================================
 
 const createTolthawkClient = () => {
@@ -28,29 +29,22 @@ const createTolthawkClient = () => {
 
   const client = wrapper(
     axios.create({
-      baseURL: TOLTHAWK_BASE_URL,
-
       jar,
-
       withCredentials: true,
-
+      maxRedirects: 5,
       timeout: 30000,
 
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-          "AppleWebKit/537.36 (KHTML, like Gecko) " +
-          "Chrome/153.0.0.0 Safari/537.36",
-
-        Accept:
-          "text/html,application/xhtml+xml," +
-          "application/xml;q=0.9,image/avif," +
-          "image/webp,*/*;q=0.8",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36",
       },
     })
   );
 
-  return client;
+  return {
+    client,
+    jar,
+  };
 };
 
 // ============================================================
@@ -58,203 +52,245 @@ const createTolthawkClient = () => {
 // ============================================================
 
 const loginToTolthawk = async (client) => {
-  const email =
-    process.env.TOLTHAWK_EMAIL;
-
-  const password =
-    process.env.TOLTHAWK_PASSWORD;
-
-  if (!email || !password) {
-    throw new Error(
-      "TOLTHAWK_EMAIL and TOLTHAWK_PASSWORD are missing from .env"
-    );
-  }
-
-  // ----------------------------------------------------------
-  // STEP 1:
-  // Open login page
-  // ----------------------------------------------------------
-
-  const loginPage =
-    await client.get(
-      TOLTHAWK_LOGIN_URL,
-      {
-        headers: {
-          Accept:
-            "text/html,application/xhtml+xml," +
-            "application/xml;q=0.9,image/avif," +
-            "image/webp,*/*;q=0.8",
-        },
-      }
+  try {
+    console.log(
+      "Opening Tolthawk login page..."
     );
 
-  // ----------------------------------------------------------
-  // STEP 2:
-  // Extract anti-forgery token
-  // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // GET LOGIN PAGE
+    // --------------------------------------------------------
 
-  const $ =
-    cheerio.load(loginPage.data);
+    const loginPage = await client.get(
+      TOLTHAWK_LOGIN_URL
+    );
 
-  const verificationToken =
-    $(
+    const $ = cheerio.load(
+      loginPage.data
+    );
+
+    // --------------------------------------------------------
+    // GET ANTI-FORGERY TOKEN
+    // --------------------------------------------------------
+
+    const verificationToken = $(
       'input[name="__RequestVerificationToken"]'
     ).val();
 
-  if (!verificationToken) {
-    throw new Error(
-      "Tolthawk login verification token was not found."
-    );
-  }
+    if (!verificationToken) {
+      throw new Error(
+        "Tolthawk verification token was not found."
+      );
+    }
 
-  // ----------------------------------------------------------
-  // STEP 3:
-  // Submit login form
-  // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // GET CREDENTIALS
+    // --------------------------------------------------------
 
-  const formData =
-    new URLSearchParams();
+    const email =
+      process.env.TOLTHAWK_EMAIL;
 
-  formData.append(
-    "Email",
-    email
-  );
+    const password =
+      process.env.TOLTHAWK_PASSWORD;
 
-  formData.append(
-    "Password",
-    password
-  );
+    if (!email || !password) {
+      throw new Error(
+        "TOLTHAWK_EMAIL or TOLTHAWK_PASSWORD is missing from .env"
+      );
+    }
 
-  formData.append(
-    "__RequestVerificationToken",
-    verificationToken
-  );
+    // --------------------------------------------------------
+    // CREATE LOGIN FORM
+    // --------------------------------------------------------
 
-  formData.append(
-    "RememberMe",
-    "false"
-  );
+    const form = new URLSearchParams();
 
-  const loginResponse =
-    await client.post(
-      TOLTHAWK_LOGIN_URL,
-      formData.toString(),
-      {
-        maxRedirects: 5,
-
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
-
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) " +
-            "Chrome/153.0.0.0 Safari/537.36",
-
-          Referer:
-            TOLTHAWK_LOGIN_URL,
-
-          Origin:
-            TOLTHAWK_BASE_URL,
-        },
-      }
+    form.append(
+      "Email",
+      email
     );
 
-  // ----------------------------------------------------------
-  // STEP 4:
-  // Detect unsuccessful login
-  // ----------------------------------------------------------
-
-  const finalUrl =
-    loginResponse.request?.res?.responseUrl ||
-    "";
-
-  const responseHtml =
-    typeof loginResponse.data ===
-    "string"
-      ? loginResponse.data
-      : "";
-
-  const stillOnLoginPage =
-    finalUrl.includes(
-      "/Account/Login"
+    form.append(
+      "Password",
+      password
     );
 
-  const loginFailed =
-    stillOnLoginPage &&
-    (
-      responseHtml.includes(
-        "Invalid login"
-      ) ||
-      responseHtml.includes(
-        "invalid"
-      ) ||
-      responseHtml.includes(
-        "incorrect"
-      ) ||
-      responseHtml.includes(
-        "Login failed"
+    form.append(
+      "__RequestVerificationToken",
+      verificationToken
+    );
+
+    form.append(
+      "RememberMe",
+      "false"
+    );
+
+    // --------------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------------
+
+    console.log(
+      "Logging into Tolthawk..."
+    );
+
+    const loginResponse =
+      await client.post(
+        TOLTHAWK_LOGIN_URL,
+        form.toString(),
+        {
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+
+            Referer:
+              TOLTHAWK_LOGIN_URL,
+          },
+        }
+      );
+
+    // --------------------------------------------------------
+    // CHECK LOGIN RESULT
+    // --------------------------------------------------------
+
+    const finalUrl =
+      loginResponse.request?.res?.responseUrl ||
+      "";
+
+    if (
+      finalUrl.includes(
+        "/Account/Login"
       )
+    ) {
+      throw new Error(
+        "Tolthawk login failed. Please check TOLTHAWK_EMAIL and TOLTHAWK_PASSWORD."
+      );
+    }
+
+    console.log(
+      "Tolthawk authentication successful."
     );
 
-  if (loginFailed) {
+    return true;
+  } catch (error) {
+    console.error(
+      "Tolthawk Login Error:",
+      error.response?.data ||
+        error.message
+    );
+
     throw new Error(
-      "Tolthawk login failed. Check TOLTHAWK_EMAIL and TOLTHAWK_PASSWORD."
+      error.message ||
+        "Tolthawk authentication failed."
     );
   }
-
-  // ----------------------------------------------------------
-  // STEP 5:
-  // Check whether authenticated session exists
-  // ----------------------------------------------------------
-
-  const cookies =
-    await client.defaults.jar.getCookies(
-      TOLTHAWK_BASE_URL
-    );
-
-  if (!cookies.length) {
-    throw new Error(
-      "Tolthawk login completed but no authentication cookie was received."
-    );
-  }
-
-  console.log(
-    "✅ Tolthawk authentication successful."
-  );
-
-  return true;
 };
 
 // ============================================================
-// FETCH TOLTHAWK SENSOR DATA
+// INITIALIZE TOLTHAWK REGION
+// ============================================================
+
+const initializeTolthawkRegion = async (
+  client,
+  jar,
+  regionId = 82
+) => {
+  try {
+    console.log(
+      `Initializing Tolthawk region ${regionId}...`
+    );
+
+    // --------------------------------------------------------
+    // IMPORTANT TOLTHAWK REGION COOKIES
+    //
+    // These were identified from the successful browser
+    // request:
+    //
+    // St=1
+    // R=82
+    // GR=1
+    // --------------------------------------------------------
+
+    await jar.setCookie(
+      "St=1",
+      TOLTHAWK_BASE_URL
+    );
+
+    await jar.setCookie(
+      `R=${regionId}`,
+      TOLTHAWK_BASE_URL
+    );
+
+    await jar.setCookie(
+      "GR=1",
+      TOLTHAWK_BASE_URL
+    );
+
+    // --------------------------------------------------------
+    // OPEN DASHBOARD
+    // --------------------------------------------------------
+
+    const dashboardResponse =
+      await client.get(
+        TOLTHAWK_DASHBOARD_URL,
+        {
+          params: {
+            regionId,
+          },
+
+          headers: {
+            Referer:
+              `${TOLTHAWK_BASE_URL}/Home/ChangeRegion`,
+          },
+        }
+      );
+
+    if (
+      dashboardResponse.status !== 200
+    ) {
+      throw new Error(
+        `Tolthawk dashboard returned HTTP ${dashboardResponse.status}`
+      );
+    }
+
+    console.log(
+      `Tolthawk region ${regionId} initialized successfully.`
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Tolthawk Region Initialization Error:",
+      error.response?.data ||
+        error.message
+    );
+
+    throw new Error(
+      error.message ||
+        "Failed to initialize Tolthawk region."
+    );
+  }
+};
+
+// ============================================================
+// FETCH SENSOR DATA
 // ============================================================
 
 const fetchSensorData = async ({
-  locationId =
-    Number(
-      process.env.TOLTHAWK_LOCATION_ID
-    ) || 868,
-
+  locationId = 868,
+  regionId = 82,
   chartOptions = 5,
-
   fromDateTime,
-
   toDateTime,
-
   tzOffset = 300,
-
   isFiltered = false,
-
+  isPagedData = true,
   weatherIds = "",
-
   tidalId = "",
-
   tidalDatum = "",
 } = {}) => {
   try {
     // --------------------------------------------------------
-    // Validate dates
+    // VALIDATE DATES
     // --------------------------------------------------------
 
     if (
@@ -267,14 +303,16 @@ const fetchSensorData = async ({
     }
 
     // --------------------------------------------------------
-    // Create fresh authenticated client
+    // CREATE CLIENT
     // --------------------------------------------------------
 
-    const client =
-      createTolthawkClient();
+    const {
+      client,
+      jar,
+    } = createTolthawkClient();
 
     // --------------------------------------------------------
-    // Login
+    // 1. LOGIN
     // --------------------------------------------------------
 
     await loginToTolthawk(
@@ -282,7 +320,17 @@ const fetchSensorData = async ({
     );
 
     // --------------------------------------------------------
-    // Request sensor data
+    // 2. INITIALIZE REGION
+    // --------------------------------------------------------
+
+    await initializeTolthawkRegion(
+      client,
+      jar,
+      regionId
+    );
+
+    // --------------------------------------------------------
+    // 3. FETCH SENSOR DATA
     // --------------------------------------------------------
 
     console.log(
@@ -291,75 +339,71 @@ const fetchSensorData = async ({
 
     const response =
       await client.get(
-        TOLTHAWK_SENSOR_URL,
+        TOLTHAWK_SENSOR_API,
         {
           params: {
             ids: locationId,
-
             chartOptions,
-
             fromDateTime,
-
             toDateTime,
-
             tzOffset,
-
             isFiltered,
-
+            isPagedData,
             weatherIds,
-
             tidalId,
-
             tidalDatum,
           },
 
           headers: {
             Accept:
-              "application/json, text/plain, */*",
+              "*/*",
 
-            Referer:
-              `${TOLTHAWK_BASE_URL}/Dashboard/Index`,
+            "Accept-Language":
+              "en-GB,en-US;q=0.9,en;q=0.8",
 
             "X-Requested-With":
               "XMLHttpRequest",
+
+            Referer:
+              `${TOLTHAWK_DASHBOARD_URL}?regionId=${regionId}`,
+
+            Origin:
+              TOLTHAWK_BASE_URL,
           },
         }
       );
 
     // --------------------------------------------------------
-    // Check API response
+    // GET API RESPONSE
     // --------------------------------------------------------
 
     const result =
       response.data;
 
-    if (
-      result?.error
-    ) {
+    // --------------------------------------------------------
+    // CHECK TOLTHAWK API ERROR
+    // --------------------------------------------------------
+
+    if (result?.error) {
       throw new Error(
         `Tolthawk API error: ${result.error}`
       );
     }
 
+    // --------------------------------------------------------
+    // CHECK RESPONSE STRUCTURE
+    // --------------------------------------------------------
+
     if (
       !result?.data?.locations
     ) {
-      console.error(
-        "Unexpected Tolthawk response:",
-        JSON.stringify(
-          result,
-          null,
-          2
-        )
-      );
-
       throw new Error(
-        "Invalid response from Tolthawk API"
+        "Invalid response from Tolthawk API."
       );
     }
 
     // --------------------------------------------------------
-    // Get requested location
+    // 4. GET LOCATION
     // --------------------------------------------------------
 
     const location =
@@ -374,7 +418,7 @@ const fetchSensorData = async ({
     }
 
     // --------------------------------------------------------
-    // Get sensor 5
+    // 5. GET SENSOR 5
     // --------------------------------------------------------
 
     const sensor =
@@ -387,7 +431,7 @@ const fetchSensorData = async ({
     }
 
     // --------------------------------------------------------
-    // Get first chart
+    // 6. GET CHART
     // --------------------------------------------------------
 
     const chart =
@@ -400,15 +444,15 @@ const fetchSensorData = async ({
     }
 
     // --------------------------------------------------------
-    // Extract data points
+    // 7. GET DATA POINTS
     // --------------------------------------------------------
 
     const dataPoints =
-      Array.isArray(
-        chart.dataPoints
-      )
-        ? chart.dataPoints
-        : [];
+      chart.dataPoints || [];
+
+    // --------------------------------------------------------
+    // NORMALIZE READINGS
+    // --------------------------------------------------------
 
     const readings =
       dataPoints
@@ -438,8 +482,7 @@ const fetchSensorData = async ({
               Number(point.y),
 
             seaLevel:
-              point.seaLevel !==
-                undefined
+              point.seaLevel !== undefined
                 ? Number(
                     point.seaLevel
                   )
@@ -449,19 +492,14 @@ const fetchSensorData = async ({
               point.dataPointSymbol ||
               "ft",
           })
-        )
-        .filter(
-          (reading) =>
-            !Number.isNaN(
-              reading.timestamp
-            ) &&
-            !Number.isNaN(
-              reading.level
-            )
         );
 
+    console.log(
+      `Received ${readings.length} Tolthawk readings.`
+    );
+
     // --------------------------------------------------------
-    // Return normalized sensor data
+    // 8. RETURN NORMALIZED DATA
     // --------------------------------------------------------
 
     return {
@@ -489,8 +527,7 @@ const fetchSensorData = async ({
         [],
 
       seaLevelReference:
-        chart.seaLevel !==
-          undefined
+        chart.seaLevel !== undefined
           ? Number(
               chart.seaLevel
             )
@@ -508,15 +545,17 @@ const fetchSensorData = async ({
     throw new Error(
       error.response?.data?.message ||
         error.message ||
-        "Failed to fetch Tolthawk sensor data."
+        "Failed to fetch sensor data."
     );
   }
 };
 
 // ============================================================
-// EXPORT
+// EXPORTS
 // ============================================================
 
 module.exports = {
   fetchSensorData,
+  loginToTolthawk,
+  initializeTolthawkRegion,
 };
