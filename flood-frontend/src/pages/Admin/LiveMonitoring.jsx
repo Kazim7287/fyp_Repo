@@ -1,3 +1,4 @@
+
 import {
   Card,
   Col,
@@ -12,102 +13,31 @@ import {
 
 import {
   EnvironmentOutlined,
-  CloudOutlined,
-  ThunderboltOutlined,
   CheckCircleOutlined,
   WarningOutlined,
-  ApiOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
+
+import {
+  useEffect,
+} from "react";
+
+import {
+  useDispatch,
+  useSelector,
+} from "react-redux";
 
 import { useNavigate } from "react-router-dom";
 
+import {
+  fetchRiverLevelData,
+} from "../store/slices/riverLevelSlice";
+
 const { Title, Text } = Typography;
 
-/* =========================================================
-   SAMPLE MONITORING DATA
-   Prototype 1
-========================================================= */
-
-const stations = [
-  {
-    id: "NWS-01",
-    name: "NWS-01",
-
-    latitude: 34.0151,
-    longitude: 71.9746,
-
-    waterLevel: 12.8,
-    rainfall: 12,
-    flow: 2.4,
-
-    temperature: 28.6,
-    humidity: 71.2,
-    soilMoisture: 58,
-
-    battery: 94,
-
-    connection: "Connected",
-    lastCommunication: "12 sec ago",
-
-    sensorStatus: "Normal",
-
-    status: "Normal",
-  },
-
-  {
-    id: "NWS-02",
-    name: "NWS-02",
-
-    latitude: 34.0084,
-    longitude: 71.9821,
-
-    waterLevel: 14.5,
-    rainfall: 38,
-    flow: 3.8,
-
-    temperature: 29.4,
-    humidity: 76.5,
-    soilMoisture: 64,
-
-    battery: 87,
-
-    connection: "Connected",
-    lastCommunication: "8 sec ago",
-
-    sensorStatus: "Normal",
-
-    status: "Warning",
-  },
-
-  {
-    id: "NWS-03",
-    name: "NWS-03",
-
-    latitude: 33.9958,
-    longitude: 71.9903,
-
-    waterLevel: 16.2,
-    rainfall: 52,
-    flow: 5.1,
-
-    temperature: 30.1,
-    humidity: 82.4,
-    soilMoisture: 73,
-
-    battery: 32,
-
-    connection: "Connected",
-    lastCommunication: "15 sec ago",
-
-    sensorStatus: "Battery Low",
-
-    status: "Critical",
-  },
-];
-
-/* =========================================================
-   STATUS CONFIGURATION
-========================================================= */
+// ============================================================
+// STATUS CONFIGURATION
+// ============================================================
 
 const getStatusTag = (status) => {
   switch (status) {
@@ -146,24 +76,152 @@ const getStatusTag = (status) => {
   }
 };
 
-/* =========================================================
-   COMPONENT
-========================================================= */
+// ============================================================
+// DETERMINE RIVER STATUS
+// ============================================================
+//
+// These thresholds are only UI thresholds for the current
+// dashboard representation. Replace them with your official
+// FloodGuard/Tolthawk thresholds when finalized.
+//
+// ============================================================
+
+const getRiverStatus = (level) => {
+  if (level === null || level === undefined) {
+    return "Unknown";
+  }
+
+  const numericLevel = Number(level);
+
+  if (Number.isNaN(numericLevel)) {
+    return "Unknown";
+  }
+
+  // Temporary dashboard thresholds
+  if (numericLevel >= 25) {
+    return "Critical";
+  }
+
+  if (numericLevel >= 20) {
+    return "Warning";
+  }
+
+  return "Normal";
+};
+
+// ============================================================
+// COMPONENT
+// ============================================================
 
 const LiveMonitoring = () => {
   const navigate = useNavigate();
 
-  /* =======================================================
-     STATION CLICK
-  ======================================================= */
+  const dispatch = useDispatch();
 
-  const handleStationClick = (station) => {
-    navigate(`/admin/monitoring/${station.id}`);
+  // ==========================================================
+  // REDUX STATE
+  // ==========================================================
+
+  const {
+    readings,
+    loading,
+    error,
+    locationName,
+    count,
+  } = useSelector(
+    (state) => state.riverLevel
+  );
+
+  // ==========================================================
+  // FETCH RIVER DATA
+  // ==========================================================
+
+  useEffect(() => {
+    dispatch(
+      fetchRiverLevelData({
+        locationId: 868,
+        start: "-7d",
+        limit: 5000,
+      })
+    );
+  }, [dispatch]);
+
+  // ==========================================================
+  // GET LATEST READING
+  // ==========================================================
+
+  const latestReading =
+    readings.length > 0
+      ? readings[readings.length - 1]
+      : null;
+
+  // ==========================================================
+  // CURRENT WATER LEVEL
+  // ==========================================================
+
+  const currentWaterLevel =
+    latestReading?.level ?? null;
+
+  // ==========================================================
+  // CURRENT STATUS
+  // ==========================================================
+
+  const currentStatus =
+    getRiverStatus(
+      currentWaterLevel
+    );
+
+  // ==========================================================
+  // STATION CLICK
+  // ==========================================================
+
+  const handleStationClick = () => {
+    navigate(
+      "/admin/monitoring/868"
+    );
   };
 
-  /* =======================================================
-     TABLE COLUMNS
-  ======================================================= */
+  // ==========================================================
+  // STATION DATA
+  // ==========================================================
+
+  const stations =
+    latestReading
+      ? [
+          {
+            id: "868",
+            name:
+              locationName ||
+              latestReading.locationName ||
+              "Kabul River Nowshera",
+
+            locationId:
+              latestReading.locationId,
+
+            waterLevel:
+              latestReading.level,
+
+            unit:
+              latestReading.unit || "ft",
+
+            sensorId:
+              latestReading.sensorId,
+
+            sensorType:
+              latestReading.sensorType,
+
+            timestamp:
+              latestReading.timestamp,
+
+            status:
+              currentStatus,
+          },
+        ]
+      : [];
+
+  // ==========================================================
+  // TABLE COLUMNS
+  // ==========================================================
 
   const columns = [
     {
@@ -179,68 +237,54 @@ const LiveMonitoring = () => {
             }}
           />
 
-          <Text strong>{value}</Text>
+          <Text strong>
+            {value}
+          </Text>
         </Space>
       ),
     },
 
     {
-      title: "Water",
+      title: "Water Level",
       dataIndex: "waterLevel",
       key: "waterLevel",
 
-      render: (value) => (
+      render: (
+        value,
+        record
+      ) => (
         <Text strong>
-          {value} m
+          {Number(value).toFixed(2)}{" "}
+          {record.unit}
         </Text>
       ),
     },
 
     {
-      title: "Rainfall",
-      dataIndex: "rainfall",
-      key: "rainfall",
+      title: "Sensor",
+      dataIndex: "sensorId",
+      key: "sensorId",
 
       render: (value) => (
-        <Space>
-          <CloudOutlined />
-
-          <span>
-            {value} mm
-          </span>
-        </Space>
+        <Text>
+          Sensor {value}
+        </Text>
       ),
     },
 
     {
-      title: "Flow",
-      dataIndex: "flow",
-      key: "flow",
+      title: "Last Updated",
+      dataIndex: "timestamp",
+      key: "timestamp",
 
       render: (value) => (
-        <Space>
-          <ApiOutlined />
-
-          <span>
-            {value} m/s
-          </span>
-        </Space>
-      ),
-    },
-
-    {
-      title: "Battery",
-      dataIndex: "battery",
-      key: "battery",
-
-      render: (value) => (
-        <Space>
-          <ThunderboltOutlined />
-
-          <span>
-            {value}%
-          </span>
-        </Space>
+        <Text>
+          {value
+            ? new Date(
+                value
+              ).toLocaleString()
+            : "N/A"}
+        </Text>
       ),
     },
 
@@ -254,37 +298,64 @@ const LiveMonitoring = () => {
     },
   ];
 
-  /* =======================================================
-     SUMMARY
-  ======================================================= */
+  // ==========================================================
+  // SUMMARY
+  // ==========================================================
 
-  const totalStations = stations.length;
+  const totalStations =
+    stations.length;
 
-  const normalStations = stations.filter(
-    (station) =>
-      station.status === "Normal"
-  ).length;
+  const normalStations =
+    stations.filter(
+      (station) =>
+        station.status ===
+        "Normal"
+    ).length;
 
-  const warningStations = stations.filter(
-    (station) =>
-      station.status === "Warning"
-  ).length;
+  const warningStations =
+    stations.filter(
+      (station) =>
+        station.status ===
+        "Warning"
+    ).length;
 
-  const criticalStations = stations.filter(
-    (station) =>
-      station.status === "Critical"
-  ).length;
+  const criticalStations =
+    stations.filter(
+      (station) =>
+        station.status ===
+        "Critical"
+    ).length;
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  // ==========================================================
+  // ERROR STATE
+  // ==========================================================
+
+  if (error) {
+    return (
+      <div>
+        <Title level={3}>
+          Live Monitoring
+        </Title>
+
+        <Card>
+          <Text type="danger">
+            Failed to load river monitoring
+            data: {error}
+          </Text>
+        </Card>
+      </div>
+    );
+  }
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
     <div>
-
-      {/* =================================================
+      {/* =====================================================
           PAGE HEADER
-      ================================================= */}
+      ===================================================== */}
 
       <div
         style={{
@@ -301,15 +372,14 @@ const LiveMonitoring = () => {
         </Title>
 
         <Text type="secondary">
-          Real-time condition of all monitoring
-          stations.
+          Real-time river condition from
+          the FloodGuard monitoring system.
         </Text>
       </div>
 
-
-      {/* =================================================
+      {/* =====================================================
           SUMMARY CARDS
-      ================================================= */}
+      ===================================================== */}
 
       <Row
         gutter={[
@@ -320,6 +390,7 @@ const LiveMonitoring = () => {
           marginBottom: 24,
         }}
       >
+        {/* TOTAL STATIONS */}
 
         <Col
           xs={24}
@@ -329,7 +400,11 @@ const LiveMonitoring = () => {
           <Card>
             <Statistic
               title="Total Stations"
-              value={totalStations}
+              value={
+                loading
+                  ? 0
+                  : totalStations
+              }
               prefix={
                 <EnvironmentOutlined />
               }
@@ -337,6 +412,7 @@ const LiveMonitoring = () => {
           </Card>
         </Col>
 
+        {/* NORMAL */}
 
         <Col
           xs={24}
@@ -346,7 +422,11 @@ const LiveMonitoring = () => {
           <Card>
             <Statistic
               title="Normal"
-              value={normalStations}
+              value={
+                loading
+                  ? 0
+                  : normalStations
+              }
               prefix={
                 <CheckCircleOutlined />
               }
@@ -354,6 +434,7 @@ const LiveMonitoring = () => {
           </Card>
         </Col>
 
+        {/* WARNING */}
 
         <Col
           xs={24}
@@ -363,7 +444,11 @@ const LiveMonitoring = () => {
           <Card>
             <Statistic
               title="Warning"
-              value={warningStations}
+              value={
+                loading
+                  ? 0
+                  : warningStations
+              }
               prefix={
                 <WarningOutlined />
               }
@@ -371,6 +456,7 @@ const LiveMonitoring = () => {
           </Card>
         </Col>
 
+        {/* CRITICAL */}
 
         <Col
           xs={24}
@@ -380,26 +466,100 @@ const LiveMonitoring = () => {
           <Card>
             <Statistic
               title="Critical"
-              value={criticalStations}
+              value={
+                loading
+                  ? 0
+                  : criticalStations
+              }
               prefix={
                 <ThunderboltOutlined />
               }
             />
           </Card>
         </Col>
-
       </Row>
 
+      {/* =====================================================
+          CURRENT RIVER LEVEL
+      ===================================================== */}
 
-      {/* =================================================
+      <Row
+        gutter={[
+          16,
+          16,
+        ]}
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <Col
+          xs={24}
+          md={12}
+        >
+          <Card>
+            <Statistic
+              title={
+                locationName ||
+                "Kabul River Nowshera"
+              }
+              value={
+                currentWaterLevel !==
+                null
+                  ? Number(
+                      currentWaterLevel
+                    ).toFixed(2)
+                  : "--"
+              }
+              suffix={
+                latestReading?.unit ||
+                "ft"
+              }
+            />
+
+            <div
+              style={{
+                marginTop: 12,
+              }}
+            >
+              Current Status:{" "}
+              {getStatusTag(
+                currentStatus
+              )}
+            </div>
+          </Card>
+        </Col>
+
+        <Col
+          xs={24}
+          md={12}
+        >
+          <Card>
+            <Statistic
+              title="Stored Readings"
+              value={count}
+            />
+
+            <Text type="secondary">
+              Data currently loaded from
+              InfluxDB
+            </Text>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* =====================================================
           STATION TABLE
-      ================================================= */}
+      ===================================================== */}
 
       <Card
         title={
           <Space>
             <Badge
-              status="processing"
+              status={
+                loading
+                  ? "processing"
+                  : "success"
+              }
             />
 
             <span>
@@ -408,32 +568,29 @@ const LiveMonitoring = () => {
           </Space>
         }
       >
-
         <Table
           rowKey="id"
-
           columns={columns}
-
           dataSource={stations}
-
+          loading={loading}
           pagination={false}
-
           scroll={{
             x: 700,
           }}
-
-          onRow={(record) => ({
-            onClick: () =>
-              handleStationClick(record),
+          locale={{
+            emptyText:
+              "No monitoring data available.",
+          }}
+          onRow={() => ({
+            onClick:
+              handleStationClick,
 
             style: {
               cursor: "pointer",
             },
           })}
         />
-
       </Card>
-
     </div>
   );
 };
