@@ -1,6 +1,6 @@
-
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { io } from "socket.io-client";
 
 import {
   Card,
@@ -29,7 +29,6 @@ import {
   ReloadOutlined,
   SearchOutlined,
   DatabaseOutlined,
-  DownloadOutlined,
   FileExcelOutlined,
   FilePdfOutlined,
   CodeOutlined,
@@ -62,6 +61,22 @@ const ENVIRONMENTAL_DATA_API =
 
 const ENVIRONMENTAL_EXPORT_API =
   "/api/environmental-data/export";
+
+/*
+|--------------------------------------------------------------------------
+| Socket.IO
+|--------------------------------------------------------------------------
+|
+| In production the frontend and backend are served through the same
+| domain, so window.location.origin is the correct Socket.IO URL.
+|
+| Nginx:
+|   /socket.io/ -> http://127.0.0.1:5000/socket.io/
+|
+*/
+
+const SOCKET_URL =
+  window.location.origin;
 
 /*
 |--------------------------------------------------------------------------
@@ -128,6 +143,18 @@ const EnvironmentalData = () => {
   */
 
   const [weather, setWeather] =
+    useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Socket.IO State
+  |--------------------------------------------------------------------------
+  */
+
+  const [socketConnected, setSocketConnected] =
+    useState(false);
+
+  const [lastRealtimeUpdate, setLastRealtimeUpdate] =
     useState(null);
 
   /*
@@ -220,204 +247,6 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Save Environmental Data
-  |--------------------------------------------------------------------------
-  |
-  | React
-  |   ↓
-  | Backend API
-  |   ↓
-  | InfluxDB Cloud
-  |
-  */
-
-  const saveEnvironmentalData = async (
-    weatherData,
-    selectedLocation
-  ) => {
-    try {
-      const current =
-        weatherData?.current;
-
-      if (!current) {
-        return;
-      }
-
-      const payload = {
-        location:
-          selectedLocation.name,
-
-        latitude:
-          Number(
-            selectedLocation.latitude
-          ),
-
-        longitude:
-          Number(
-            selectedLocation.longitude
-          ),
-
-        temperature:
-          current.temperature_2m != null
-            ? Number(
-                current.temperature_2m
-              )
-            : null,
-
-        humidity:
-          current.relative_humidity_2m != null
-            ? Number(
-                current.relative_humidity_2m
-              )
-            : null,
-
-        rainfall:
-          current.rain != null
-            ? Number(current.rain)
-            : current.precipitation != null
-            ? Number(
-                current.precipitation
-              )
-            : null,
-
-        soil_moisture:
-          current.soil_moisture_0_to_7cm != null
-            ? Number(
-                current.soil_moisture_0_to_7cm
-              )
-            : null,
-
-        wind_speed:
-          current.wind_speed_10m != null
-            ? Number(
-                current.wind_speed_10m
-              )
-            : null,
-      };
-
-      setSavingData(true);
-
-      const response = await axios.post(
-        ENVIRONMENTAL_DATA_API,
-        payload,
-        {
-          withCredentials: true,
-        }
-      );
-
-      if (response.data?.success) {
-        console.log(
-          "Environmental data saved to InfluxDB Cloud"
-        );
-      }
-    } catch (err) {
-      console.error(
-        "Failed to save environmental data:",
-        err
-      );
-
-      message.warning(
-        "Weather loaded, but environmental data could not be saved."
-      );
-    } finally {
-      setSavingData(false);
-    }
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Fetch Weather
-  |--------------------------------------------------------------------------
-  */
-
-  const fetchWeather = async (
-    selectedLocation = location
-  ) => {
-    try {
-      setWeatherLoading(true);
-      setError(null);
-
-      const response =
-        await axios.get(
-          WEATHER_API,
-          {
-            params: {
-              latitude:
-                selectedLocation.latitude,
-
-              longitude:
-                selectedLocation.longitude,
-
-              /*
-              | Current conditions
-              */
-
-              current:
-                "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m,soil_moisture_0_to_7cm",
-
-              /*
-              | Hourly conditions
-              */
-
-              hourly:
-                "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m,soil_moisture_0_to_7cm",
-
-              /*
-              | Timezone
-              */
-
-              timezone:
-                "auto",
-
-              /*
-              | Units
-              */
-
-              temperature_unit:
-                "celsius",
-
-              wind_speed_unit:
-                "kmh",
-
-              precipitation_unit:
-                "mm",
-            },
-          }
-        );
-
-      const weatherData =
-        response.data;
-
-      setWeather(
-        weatherData
-      );
-
-      /*
-      |--------------------------------------------------------------------------
-      | Save Current Environmental Data
-      |--------------------------------------------------------------------------
-      */
-
-      await saveEnvironmentalData(
-        weatherData,
-        selectedLocation
-      );
-    } catch (err) {
-      console.error(
-        "Environmental data error:",
-        err
-      );
-
-      setError(
-        "Unable to fetch environmental conditions for this location."
-      );
-    } finally {
-      setWeatherLoading(false);
-    }
-  };
-
-  /*
-  |--------------------------------------------------------------------------
   | Build Historical Query Parameters
   |--------------------------------------------------------------------------
   */
@@ -432,12 +261,10 @@ const EnvironmentalData = () => {
       customDateRange.length === 2
     ) {
       params.start =
-        customDateRange[0]
-          .toISOString();
+        customDateRange[0].toISOString();
 
       params.stop =
-        customDateRange[1]
-          .toISOString();
+        customDateRange[1].toISOString();
 
       return params;
     }
@@ -509,6 +336,477 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
+  | Save Environmental Data
+  |--------------------------------------------------------------------------
+  |
+  | React
+  |   ↓
+  | Backend API
+  |   ↓
+  | InfluxDB Cloud
+  |   ↓
+  | Socket.IO
+  |   ↓
+  | Connected Dashboards
+  |
+  */
+
+  const saveEnvironmentalData = async (
+    weatherData,
+    selectedLocation
+  ) => {
+    try {
+      const current =
+        weatherData?.current;
+
+      if (!current) {
+        return;
+      }
+
+      const payload = {
+        location:
+          selectedLocation.name,
+
+        latitude:
+          Number(
+            selectedLocation.latitude
+          ),
+
+        longitude:
+          Number(
+            selectedLocation.longitude
+          ),
+
+        temperature:
+          current.temperature_2m != null
+            ? Number(
+                current.temperature_2m
+              )
+            : null,
+
+        humidity:
+          current.relative_humidity_2m != null
+            ? Number(
+                current.relative_humidity_2m
+              )
+            : null,
+
+        rainfall:
+          current.rain != null
+            ? Number(current.rain)
+            : current.precipitation != null
+            ? Number(
+                current.precipitation
+              )
+            : null,
+
+        soil_moisture:
+          current.soil_moisture_0_to_7cm != null
+            ? Number(
+                current.soil_moisture_0_to_7cm
+              )
+            : null,
+
+        wind_speed:
+          current.wind_speed_10m != null
+            ? Number(
+                current.wind_speed_10m
+              )
+            : null,
+      };
+
+      setSavingData(true);
+
+      const response =
+        await axios.post(
+          ENVIRONMENTAL_DATA_API,
+          payload,
+          {
+            withCredentials: true,
+          }
+        );
+
+      if (response.data?.success) {
+        console.log(
+          "Environmental data saved to InfluxDB Cloud"
+        );
+      }
+    } catch (err) {
+      console.error(
+        "Failed to save environmental data:",
+        err
+      );
+
+      message.warning(
+        "Weather loaded, but environmental data could not be saved."
+      );
+    } finally {
+      setSavingData(false);
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Weather
+  |--------------------------------------------------------------------------
+  */
+
+  const fetchWeather = async (
+    selectedLocation = location
+  ) => {
+    try {
+      setWeatherLoading(true);
+      setError(null);
+
+      const response =
+        await axios.get(
+          WEATHER_API,
+          {
+            params: {
+              latitude:
+                selectedLocation.latitude,
+
+              longitude:
+                selectedLocation.longitude,
+
+              /*
+              |--------------------------------------------------------------------------
+              | Current Conditions
+              |--------------------------------------------------------------------------
+              */
+
+              current:
+                "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m,soil_moisture_0_to_7cm",
+
+              /*
+              |--------------------------------------------------------------------------
+              | Hourly Conditions
+              |--------------------------------------------------------------------------
+              */
+
+              hourly:
+                "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m,soil_moisture_0_to_7cm",
+
+              /*
+              |--------------------------------------------------------------------------
+              | Timezone
+              |--------------------------------------------------------------------------
+              */
+
+              timezone:
+                "auto",
+
+              /*
+              |--------------------------------------------------------------------------
+              | Units
+              |--------------------------------------------------------------------------
+              */
+
+              temperature_unit:
+                "celsius",
+
+              wind_speed_unit:
+                "kmh",
+
+              precipitation_unit:
+                "mm",
+            },
+          }
+        );
+
+      const weatherData =
+        response.data;
+
+      setWeather(
+        weatherData
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Save Current Environmental Data
+      |--------------------------------------------------------------------------
+      */
+
+      await saveEnvironmentalData(
+        weatherData,
+        selectedLocation
+      );
+    } catch (err) {
+      console.error(
+        "Environmental data error:",
+        err
+      );
+
+      setError(
+        "Unable to fetch environmental conditions for this location."
+      );
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Socket.IO Real-Time Connection
+  |--------------------------------------------------------------------------
+  |
+  | Open-Meteo / IoT
+  |       ↓
+  | Express Backend
+  |       ↓
+  | InfluxDB Cloud
+  |       ↓
+  | Socket.IO
+  |       ↓
+  | React Dashboard
+  |
+  */
+
+  useEffect(() => {
+    console.log(
+      "🔌 Connecting to Socket.IO:",
+      SOCKET_URL
+    );
+
+    const socket = io(
+      SOCKET_URL,
+      {
+        withCredentials: true,
+
+        transports: [
+          "websocket",
+          "polling",
+        ],
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Connected
+    |--------------------------------------------------------------------------
+    */
+
+    socket.on(
+      "connect",
+      () => {
+        console.log(
+          "🔌 WebSocket connected:",
+          socket.id
+        );
+
+        setSocketConnected(true);
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Disconnected
+    |--------------------------------------------------------------------------
+    */
+
+    socket.on(
+      "disconnect",
+      (reason) => {
+        console.log(
+          "🔌 WebSocket disconnected:",
+          reason
+        );
+
+        setSocketConnected(false);
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Connection Error
+    |--------------------------------------------------------------------------
+    */
+
+    socket.on(
+      "connect_error",
+      (socketError) => {
+        console.error(
+          "❌ WebSocket connection error:",
+          socketError
+        );
+
+        setSocketConnected(false);
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Real-Time Environmental Data
+    |--------------------------------------------------------------------------
+    */
+
+    socket.on(
+      "environmental_data_updated",
+      (newData) => {
+        console.log(
+          "🌱 Real-time environmental data received:",
+          newData
+        );
+
+        if (
+          !newData ||
+          typeof newData !== "object"
+        ) {
+          return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Only update the currently selected location
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          newData.location &&
+          newData.location !== location.name
+        ) {
+          console.log(
+            "🌍 Ignoring update for another location:",
+            newData.location
+          );
+
+          return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Store latest real-time update time
+        |--------------------------------------------------------------------------
+        */
+
+        setLastRealtimeUpdate(
+          new Date()
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Current Weather
+        |--------------------------------------------------------------------------
+        */
+
+        setWeather(
+          (previousWeather) => {
+            if (
+              !previousWeather
+            ) {
+              return previousWeather;
+            }
+
+            const previousCurrent =
+              previousWeather.current ||
+              {};
+
+            return {
+              ...previousWeather,
+
+              current: {
+                ...previousCurrent,
+
+                temperature_2m:
+                  newData.temperature ??
+                  previousCurrent.temperature_2m,
+
+                relative_humidity_2m:
+                  newData.humidity ??
+                  previousCurrent.relative_humidity_2m,
+
+                rain:
+                  newData.rainfall ??
+                  previousCurrent.rain,
+
+                precipitation:
+                  newData.rainfall ??
+                  previousCurrent.precipitation,
+
+                soil_moisture_0_to_7cm:
+                  newData.soil_moisture ??
+                  previousCurrent.soil_moisture_0_to_7cm,
+
+                wind_speed_10m:
+                  newData.wind_speed ??
+                  previousCurrent.wind_speed_10m,
+
+                time:
+                  newData.timestamp ??
+                  previousCurrent.time,
+              },
+            };
+          }
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Historical Table
+        |--------------------------------------------------------------------------
+        */
+
+        const historicalRecord = {
+          timestamp:
+            newData.timestamp,
+
+          location:
+            newData.location,
+
+          temperature:
+            newData.temperature,
+
+          humidity:
+            newData.humidity,
+
+          rainfall:
+            newData.rainfall,
+
+          soil_moisture:
+            newData.soil_moisture,
+
+          wind_speed:
+            newData.wind_speed,
+        };
+
+        setHistoricalData(
+          (previousData) => {
+            const filteredData =
+              previousData.filter(
+                (record) =>
+                  !(
+                    record.timestamp ===
+                      historicalRecord.timestamp &&
+                    record.location ===
+                      historicalRecord.location
+                  )
+              );
+
+            return [
+              historicalRecord,
+              ...filteredData,
+            ];
+          }
+        );
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cleanup
+    |--------------------------------------------------------------------------
+    */
+
+    return () => {
+      console.log(
+        "🔌 Closing WebSocket connection"
+      );
+
+      socket.disconnect();
+    };
+  }, [location.name]);
+
+  /*
+  |--------------------------------------------------------------------------
   | Initial Weather Fetch
   |--------------------------------------------------------------------------
   */
@@ -555,12 +853,14 @@ const EnvironmentalData = () => {
 
   /*
   |--------------------------------------------------------------------------
-  | Refresh Historical Data When Location Changes
+  | Refresh Historical Data When Location/Range Changes
   |--------------------------------------------------------------------------
   */
 
   useEffect(() => {
-    if (location?.name) {
+    if (
+      location?.name
+    ) {
       fetchHistoricalData();
     }
   }, [
@@ -682,10 +982,14 @@ const EnvironmentalData = () => {
         getHistoricalParams();
 
       /*
+      |--------------------------------------------------------------------------
       | JSON
+      |--------------------------------------------------------------------------
       */
 
-      if (format === "json") {
+      if (
+        format === "json"
+      ) {
         const response =
           await axios.get(
             `${ENVIRONMENTAL_EXPORT_API}/json`,
@@ -746,7 +1050,9 @@ const EnvironmentalData = () => {
       }
 
       /*
+      |--------------------------------------------------------------------------
       | Excel / PDF
+      |--------------------------------------------------------------------------
       */
 
       const response =
@@ -754,6 +1060,7 @@ const EnvironmentalData = () => {
           `${ENVIRONMENTAL_EXPORT_API}/${format}`,
           {
             params,
+
             responseType:
               "blob",
 
@@ -777,7 +1084,8 @@ const EnvironmentalData = () => {
             response.data,
           ],
           {
-            type: mimeType,
+            type:
+              mimeType,
           }
         );
 
@@ -876,7 +1184,9 @@ const EnvironmentalData = () => {
     }
 
     /*
+    |--------------------------------------------------------------------------
     | Rainfall
+    |--------------------------------------------------------------------------
     */
 
     if (
@@ -895,7 +1205,9 @@ const EnvironmentalData = () => {
     }
 
     /*
+    |--------------------------------------------------------------------------
     | Temperature
+    |--------------------------------------------------------------------------
     */
 
     if (
@@ -917,7 +1229,9 @@ const EnvironmentalData = () => {
     }
 
     /*
+    |--------------------------------------------------------------------------
     | Humidity
+    |--------------------------------------------------------------------------
     */
 
     if (
@@ -936,7 +1250,9 @@ const EnvironmentalData = () => {
     }
 
     /*
+    |--------------------------------------------------------------------------
     | Wind
+    |--------------------------------------------------------------------------
     */
 
     if (
@@ -955,7 +1271,9 @@ const EnvironmentalData = () => {
     }
 
     /*
+    |--------------------------------------------------------------------------
     | Soil Moisture
+    |--------------------------------------------------------------------------
     */
 
     if (
@@ -1662,9 +1980,30 @@ const EnvironmentalData = () => {
             {location.country}
           </Text>
 
-          <Tag color="green">
-            Live
+          {/* Socket.IO Connection Status */}
+
+          <Tag
+            color={
+              socketConnected
+                ? "green"
+                : "red"
+            }
+          >
+            {socketConnected
+              ? "Real-Time Connected"
+              : "Real-Time Disconnected"}
           </Tag>
+
+          {/* Last Socket.IO Update */}
+
+          {lastRealtimeUpdate && (
+            <Text type="secondary">
+              Last live update:{" "}
+              {lastRealtimeUpdate.toLocaleTimeString(
+                "en-PK"
+              )}
+            </Text>
+          )}
 
           <Tag
             color={
@@ -2117,6 +2456,13 @@ const EnvironmentalData = () => {
           Cloud through the
           Flood Forecasting
           backend.
+        </Text>
+
+        <Text type="secondary">
+          Real-time updates are
+          delivered to the
+          dashboard through
+          Socket.IO.
         </Text>
 
         <Text type="secondary">
