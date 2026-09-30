@@ -1,4 +1,3 @@
-
 const { Point } = require("@influxdata/influxdb-client");
 
 const { influxDB } = require("../../influxdb");
@@ -29,8 +28,10 @@ const saveEnvironmentalData = async (req, res) => {
       });
     }
 
-    const point = new Point("environmental_data")
-      .tag("location", String(location));
+    const point = new Point("environmental_data").tag(
+      "location",
+      String(location)
+    );
 
     if (latitude !== undefined && latitude !== null) {
       point.floatField("latitude", Number(latitude));
@@ -60,12 +61,61 @@ const saveEnvironmentalData = async (req, res) => {
       point.floatField("wind_speed", Number(wind_speed));
     }
 
+    // Save data to InfluxDB
     writeApi.writePoint(point);
     await writeApi.flush();
+
+    // Prepare real-time data for connected dashboards
+    const realtimeData = {
+      location: String(location),
+      latitude:
+        latitude !== undefined && latitude !== null
+          ? Number(latitude)
+          : null,
+      longitude:
+        longitude !== undefined && longitude !== null
+          ? Number(longitude)
+          : null,
+      temperature:
+        temperature !== undefined && temperature !== null
+          ? Number(temperature)
+          : null,
+      humidity:
+        humidity !== undefined && humidity !== null
+          ? Number(humidity)
+          : null,
+      rainfall:
+        rainfall !== undefined && rainfall !== null
+          ? Number(rainfall)
+          : null,
+      soil_moisture:
+        soil_moisture !== undefined && soil_moisture !== null
+          ? Number(soil_moisture)
+          : null,
+      wind_speed:
+        wind_speed !== undefined && wind_speed !== null
+          ? Number(wind_speed)
+          : null,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Get Socket.IO instance from Express
+    const io = req.app.get("io");
+
+    // Send update to all connected dashboards
+    if (io) {
+      io.emit("environmental_data_updated", realtimeData);
+
+      console.log(
+        "📡 Real-time environmental data emitted:",
+        realtimeData
+      );
+    }
 
     return res.status(201).json({
       success: true,
       message: "Environmental data saved successfully",
+      data: realtimeData,
     });
   } catch (error) {
     console.error("InfluxDB environmental data error:", error);
