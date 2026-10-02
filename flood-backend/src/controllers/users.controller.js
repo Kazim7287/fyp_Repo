@@ -2,6 +2,39 @@
 const bcrypt = require("bcrypt");
 const pool = require("../config/db");
 
+const {
+  createSystemLog,
+} = require("../services/systemLogService");
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+const getClientIp = (req) => {
+  return (
+    req.ip ||
+    req.headers["x-forwarded-for"] ||
+    req.socket?.remoteAddress ||
+    null
+  );
+};
+
+const getUserAgent = (req) => {
+  return req.get("user-agent") || null;
+};
+
+const getAuditUserId = (req) => {
+  return req.user?.id || null;
+};
+
+const getAuditUserName = (req) => {
+  return (
+    req.user?.name ||
+    req.user?.email ||
+    "Unknown"
+  );
+};
+
 // =========================================================
 // GET ALL USERS
 // GET /api/users
@@ -36,7 +69,6 @@ const getUsers = async (req, res) => {
     });
   }
 };
-
 
 // =========================================================
 // CREATE USER
@@ -75,7 +107,10 @@ const createUser = async (req, res) => {
     // -------------------------------------------------------
 
     const normalizedName = name.trim();
-    const normalizedEmail = email.trim().toLowerCase();
+
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
 
     // -------------------------------------------------------
     // BASIC VALIDATION
@@ -179,10 +214,56 @@ const createUser = async (req, res) => {
       ]
     );
 
+    const createdUser = result.rows[0];
+
+    // -------------------------------------------------------
+    // SYSTEM AUDIT LOG — CREATE USER
+    // -------------------------------------------------------
+
+    await createSystemLog({
+      // Admin who performed the action
+      userId: getAuditUserId(req),
+      userName: getAuditUserName(req),
+
+      action: "CREATE",
+
+      module: "User Management",
+
+      resourceType: "user",
+
+      // User who was created
+      resourceId: createdUser.id,
+
+      description:
+        `User account "${createdUser.name}" was created.`,
+
+      oldValues: null,
+
+      newValues: {
+        id: createdUser.id,
+        name: createdUser.name,
+        email: createdUser.email,
+        role: createdUser.role,
+        status: createdUser.status,
+      },
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Info",
+    });
+
+    // -------------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------------
+
     return res.status(201).json({
       success: true,
       message: "User created successfully",
-      user: result.rows[0],
+      user: createdUser,
     });
 
   } catch (error) {
@@ -197,7 +278,6 @@ const createUser = async (req, res) => {
     });
   }
 };
-
 
 // =========================================================
 // UPDATE USER
@@ -236,7 +316,10 @@ const updateUser = async (req, res) => {
     // -------------------------------------------------------
 
     const normalizedName = name.trim();
-    const normalizedEmail = email.trim().toLowerCase();
+
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
 
     if (normalizedName.length < 2) {
       return res.status(400).json({
@@ -270,8 +353,11 @@ const updateUser = async (req, res) => {
       `
       SELECT
         id,
+        name,
+        email,
         role,
-        status
+        status,
+        created_at
       FROM users
       WHERE id = $1
       `,
@@ -284,6 +370,8 @@ const updateUser = async (req, res) => {
         message: "User not found",
       });
     }
+
+    const oldUser = existingUser.rows[0];
 
     // -------------------------------------------------------
     // CHECK EMAIL
@@ -338,10 +426,62 @@ const updateUser = async (req, res) => {
       ]
     );
 
+    const updatedUser = result.rows[0];
+
+    // -------------------------------------------------------
+    // SYSTEM AUDIT LOG — UPDATE USER
+    // -------------------------------------------------------
+
+    await createSystemLog({
+      // Admin who performed the action
+      userId: getAuditUserId(req),
+      userName: getAuditUserName(req),
+
+      action: "UPDATE",
+
+      module: "User Management",
+
+      resourceType: "user",
+
+      // User who was updated
+      resourceId: updatedUser.id,
+
+      description:
+        `User account "${updatedUser.name}" was updated.`,
+
+      oldValues: {
+        id: oldUser.id,
+        name: oldUser.name,
+        email: oldUser.email,
+        role: oldUser.role,
+        status: oldUser.status,
+      },
+
+      newValues: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        status: updatedUser.status,
+      },
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Info",
+    });
+
+    // -------------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------------
+
     return res.status(200).json({
       success: true,
       message: "User updated successfully",
-      user: result.rows[0],
+      user: updatedUser,
     });
 
   } catch (error) {
@@ -356,7 +496,6 @@ const updateUser = async (req, res) => {
     });
   }
 };
-
 
 // =========================================================
 // DISABLE USER
@@ -376,6 +515,8 @@ const disableUser = async (req, res) => {
       `
       SELECT
         id,
+        name,
+        email,
         role,
         status
       FROM users
@@ -391,12 +532,14 @@ const disableUser = async (req, res) => {
       });
     }
 
+    const oldUser = existingUser.rows[0];
+
     // -------------------------------------------------------
     // PREVENT DISABLING ALREADY DISABLED USER
     // -------------------------------------------------------
 
     if (
-      existingUser.rows[0].status === "disabled"
+      oldUser.status === "disabled"
     ) {
       return res.status(400).json({
         success: false,
@@ -423,10 +566,62 @@ const disableUser = async (req, res) => {
       [id]
     );
 
+    const disabledUser = result.rows[0];
+
+    // -------------------------------------------------------
+    // SYSTEM AUDIT LOG — DISABLE USER
+    // -------------------------------------------------------
+
+    await createSystemLog({
+      // Admin who performed the action
+      userId: getAuditUserId(req),
+      userName: getAuditUserName(req),
+
+      action: "DISABLE",
+
+      module: "User Management",
+
+      resourceType: "user",
+
+      // User who was disabled
+      resourceId: disabledUser.id,
+
+      description:
+        `User account "${disabledUser.name}" was disabled.`,
+
+      oldValues: {
+        id: oldUser.id,
+        name: oldUser.name,
+        email: oldUser.email,
+        role: oldUser.role,
+        status: oldUser.status,
+      },
+
+      newValues: {
+        id: disabledUser.id,
+        name: disabledUser.name,
+        email: disabledUser.email,
+        role: disabledUser.role,
+        status: disabledUser.status,
+      },
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Warning",
+    });
+
+    // -------------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------------
+
     return res.status(200).json({
       success: true,
       message: "User disabled successfully",
-      user: result.rows[0],
+      user: disabledUser,
     });
 
   } catch (error) {
@@ -441,7 +636,6 @@ const disableUser = async (req, res) => {
     });
   }
 };
-
 
 // =========================================================
 // ENABLE USER
@@ -461,6 +655,8 @@ const enableUser = async (req, res) => {
       `
       SELECT
         id,
+        name,
+        email,
         role,
         status
       FROM users
@@ -476,12 +672,14 @@ const enableUser = async (req, res) => {
       });
     }
 
+    const oldUser = existingUser.rows[0];
+
     // -------------------------------------------------------
     // PREVENT ENABLING ALREADY ACTIVE USER
     // -------------------------------------------------------
 
     if (
-      existingUser.rows[0].status === "active"
+      oldUser.status === "active"
     ) {
       return res.status(400).json({
         success: false,
@@ -508,10 +706,62 @@ const enableUser = async (req, res) => {
       [id]
     );
 
+    const enabledUser = result.rows[0];
+
+    // -------------------------------------------------------
+    // SYSTEM AUDIT LOG — ENABLE USER
+    // -------------------------------------------------------
+
+    await createSystemLog({
+      // Admin who performed the action
+      userId: getAuditUserId(req),
+      userName: getAuditUserName(req),
+
+      action: "ENABLE",
+
+      module: "User Management",
+
+      resourceType: "user",
+
+      // User who was enabled
+      resourceId: enabledUser.id,
+
+      description:
+        `User account "${enabledUser.name}" was enabled.`,
+
+      oldValues: {
+        id: oldUser.id,
+        name: oldUser.name,
+        email: oldUser.email,
+        role: oldUser.role,
+        status: oldUser.status,
+      },
+
+      newValues: {
+        id: enabledUser.id,
+        name: enabledUser.name,
+        email: enabledUser.email,
+        role: enabledUser.role,
+        status: enabledUser.status,
+      },
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Info",
+    });
+
+    // -------------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------------
+
     return res.status(200).json({
       success: true,
       message: "User enabled successfully",
-      user: result.rows[0],
+      user: enabledUser,
     });
 
   } catch (error) {
@@ -526,7 +776,6 @@ const enableUser = async (req, res) => {
     });
   }
 };
-
 
 // =========================================================
 // EXPORT CONTROLLERS

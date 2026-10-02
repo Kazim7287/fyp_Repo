@@ -2,6 +2,31 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
 
+const {
+  createSystemLog,
+} = require("../services/systemLogService");
+
+// =========================================================
+// HELPER — GET CLIENT IP
+// =========================================================
+
+const getClientIp = (req) => {
+  return (
+    req.ip ||
+    req.headers["x-forwarded-for"] ||
+    req.socket?.remoteAddress ||
+    null
+  );
+};
+
+// =========================================================
+// HELPER — GET USER AGENT
+// =========================================================
+
+const getUserAgent = (req) => {
+  return req.get("user-agent") || null;
+};
+
 // =========================================================
 // JWT
 // =========================================================
@@ -171,6 +196,40 @@ const register = async (req, res) => {
     const user = result.rows[0];
 
     // =====================================================
+    // SYSTEM AUDIT LOG — REGISTRATION
+    // =====================================================
+
+    await createSystemLog({
+      userId: user.id,
+      userName: user.name,
+
+      action: "REGISTER",
+
+      module: "Authentication",
+
+      resourceType: "user",
+      resourceId: user.id,
+
+      description:
+        "A new user account was registered.",
+
+      newValues: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Info",
+    });
+
+    // =====================================================
     // RESPONSE
     // =====================================================
 
@@ -240,7 +299,39 @@ const login = async (req, res) => {
       [normalizedEmail]
     );
 
+    // =====================================================
+    // USER NOT FOUND
+    // =====================================================
+
     if (result.rows.length === 0) {
+
+      // ===================================================
+      // SYSTEM AUDIT LOG — FAILED LOGIN
+      // ===================================================
+
+      await createSystemLog({
+        userId: null,
+        userName: "Unknown",
+
+        action: "LOGIN_FAILED",
+
+        module: "Authentication",
+
+        resourceType: "user",
+        resourceId: null,
+
+        description:
+          "Login attempt failed because the account could not be authenticated.",
+
+        ipAddress: getClientIp(req),
+
+        userAgent: getUserAgent(req),
+
+        status: "Failed",
+
+        severity: "Warning",
+      });
+
       return res.status(401).json({
         success: false,
         message:
@@ -255,6 +346,34 @@ const login = async (req, res) => {
     // =====================================================
 
     if (user.status !== "active") {
+
+      // ===================================================
+      // SYSTEM AUDIT LOG — BLOCKED LOGIN
+      // ===================================================
+
+      await createSystemLog({
+        userId: user.id,
+        userName: user.name,
+
+        action: "LOGIN_BLOCKED",
+
+        module: "Authentication",
+
+        resourceType: "user",
+        resourceId: user.id,
+
+        description:
+          "Login attempt was blocked because the user account is disabled.",
+
+        ipAddress: getClientIp(req),
+
+        userAgent: getUserAgent(req),
+
+        status: "Failed",
+
+        severity: "Warning",
+      });
+
       return res.status(403).json({
         success: false,
         message:
@@ -272,7 +391,39 @@ const login = async (req, res) => {
         user.password_hash
       );
 
+    // =====================================================
+    // WRONG PASSWORD
+    // =====================================================
+
     if (!passwordMatch) {
+
+      // ===================================================
+      // SYSTEM AUDIT LOG — FAILED LOGIN
+      // ===================================================
+
+      await createSystemLog({
+        userId: user.id,
+        userName: user.name,
+
+        action: "LOGIN_FAILED",
+
+        module: "Authentication",
+
+        resourceType: "user",
+        resourceId: user.id,
+
+        description:
+          "Login attempt failed because the supplied password was incorrect.",
+
+        ipAddress: getClientIp(req),
+
+        userAgent: getUserAgent(req),
+
+        status: "Failed",
+
+        severity: "Warning",
+      });
+
       return res.status(401).json({
         success: false,
         message:
@@ -296,6 +447,33 @@ const login = async (req, res) => {
       accessToken,
       getCookieOptions()
     );
+
+    // =====================================================
+    // SYSTEM AUDIT LOG — SUCCESSFUL LOGIN
+    // =====================================================
+
+    await createSystemLog({
+      userId: user.id,
+      userName: user.name,
+
+      action: "LOGIN",
+
+      module: "Authentication",
+
+      resourceType: "user",
+      resourceId: user.id,
+
+      description:
+        "User successfully logged into the system.",
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Info",
+    });
 
     // =====================================================
     // RESPONSE
@@ -419,10 +597,52 @@ const getCurrentUser = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
+
+    // =====================================================
+    // SYSTEM AUDIT LOG — LOGOUT
+    // =====================================================
+
+    await createSystemLog({
+      userId: req.user?.id || null,
+
+      userName:
+        req.user?.name ||
+        req.user?.email ||
+        "Unknown",
+
+      action: "LOGOUT",
+
+      module: "Authentication",
+
+      resourceType: "user",
+
+      resourceId:
+        req.user?.id || null,
+
+      description:
+        "User successfully logged out of the system.",
+
+      ipAddress: getClientIp(req),
+
+      userAgent: getUserAgent(req),
+
+      status: "Success",
+
+      severity: "Info",
+    });
+
+    // =====================================================
+    // CLEAR COOKIE
+    // =====================================================
+
     res.clearCookie(
       "accessToken",
       getCookieOptions()
     );
+
+    // =====================================================
+    // RESPONSE
+    // =====================================================
 
     return res.status(200).json({
       success: true,
