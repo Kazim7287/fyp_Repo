@@ -1,4 +1,17 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+
+import {
+  fetchHomepageHero,
+  saveHomepageHero,
+  publishHomepageHero,
+  selectHomepageHero,
+  selectHomepageHeroLoading,
+  selectHomepageHeroSaving,
+  selectHomepageHeroPublishing,
+  selectHomepageHeroError,
+} from "../../../store/slices/homepageHeroSlice";
 
 import {
   Card,
@@ -15,7 +28,6 @@ import {
   Col,
   Tag,
   Modal,
-
 } from "antd";
 
 import {
@@ -26,34 +38,24 @@ import {
   FileTextOutlined,
   ReadOutlined,
   NotificationOutlined,
+  CloudUploadOutlined,
 } from "@ant-design/icons";
 
-const { Title, Text,  Paragraph } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 /* =========================================================
    SAMPLE BLOG DATA
-   Replace this later with API data from Blog Management
 ========================================================= */
 
 const blogOptions = [
-  {
-    value: 1,
-    label: "Flood Safety",
-  },
-  {
-    value: 2,
-    label: "AI Forecasting",
-  },
-  {
-    value: 3,
-    label: "2010 Flood Study",
-  },
+  { value: 1, label: "Flood Safety" },
+  { value: 2, label: "AI Forecasting" },
+  { value: 3, label: "2010 Flood Study" },
 ];
 
 /* =========================================================
    SAMPLE RESEARCH DATA
-   Replace this later with API data from Research Management
 ========================================================= */
 
 const researchOptions = [
@@ -76,8 +78,7 @@ const researchOptions = [
 ========================================================= */
 
 const initialHomeContent = {
-  heroHeading:
-    "AI & IoT-Based Flood Early Warning System",
+  heroHeading: "AI & IoT-Based Flood Early Warning System",
 
   heroDescription:
     "An intelligent flood monitoring and early-warning platform that combines IoT sensors, environmental data, GIS, and artificial intelligence to provide timely flood risk information.",
@@ -101,12 +102,58 @@ const initialHomeContent = {
 
 const HomePage = () => {
   const [form] = Form.useForm();
+  const dispatch = useDispatch();
 
-  const [homeContent, setHomeContent] =
-    useState(initialHomeContent);
+  // REDUX STATE
+  const hero = useSelector(selectHomepageHero);
+  const heroLoading = useSelector(selectHomepageHeroLoading);
+  const heroSaving = useSelector(selectHomepageHeroSaving);
+  const heroPublishing = useSelector(selectHomepageHeroPublishing);
+  const heroError = useSelector(selectHomepageHeroError);
 
-  const [previewVisible, setPreviewVisible] =
-    useState(false);
+  // LOCAL STATE
+  const [homeContent, setHomeContent] = useState(initialHomeContent);
+  const [previewVisible, setPreviewVisible] = useState(false);
+
+  /* =======================================================
+     FETCH HERO DATA WHEN PAGE OPENS
+  ======================================================= */
+
+  useEffect(() => {
+    dispatch(fetchHomepageHero());
+  }, [dispatch]);
+
+  /* =======================================================
+     LOAD HERO DATA INTO FORM
+  ======================================================= */
+
+  useEffect(() => {
+    if (hero) {
+      const heading = hero.hero_heading || "";
+      const description = hero.hero_description || "";
+
+      form.setFieldsValue({
+        heroHeading: heading,
+        heroDescription: description,
+      });
+
+      setHomeContent((previous) => ({
+        ...previous,
+        heroHeading: heading,
+        heroDescription: description,
+      }));
+    }
+  }, [hero, form]);
+
+  /* =======================================================
+     SHOW FETCH ERROR
+  ======================================================= */
+
+  useEffect(() => {
+    if (heroError) {
+      message.error(heroError);
+    }
+  }, [heroError]);
 
   /* =======================================================
      OPEN PREVIEW
@@ -124,35 +171,55 @@ const HomePage = () => {
   };
 
   /* =======================================================
-     SAVE HOME PAGE
+     SAVE HERO SECTION
   ======================================================= */
 
   const handleSave = async () => {
     try {
-      const values = await form.validateFields();
+      const values = await form.validateFields([
+        "heroHeading",
+        "heroDescription",
+      ]);
 
-      const heroImage =
-        values.heroImage?.[0]?.originFileObj ||
-        homeContent.heroImage ||
-        null;
-
-      const updatedContent = {
-        ...values,
-        heroImage,
+      const heroData = {
+        hero_heading: values.heroHeading.trim(),
+        hero_description: values.heroDescription.trim(),
       };
 
-      setHomeContent(updatedContent);
+      await dispatch(saveHomepageHero(heroData)).unwrap();
 
-      message.success(
-        "Home page content saved successfully."
-      );
+      setHomeContent((previous) => ({
+        ...previous,
+        heroHeading: values.heroHeading,
+        heroDescription: values.heroDescription,
+      }));
 
-      console.log(
-        "HOME PAGE DATA:",
-        updatedContent
-      );
+      message.success("Homepage hero saved successfully.");
     } catch (error) {
-      // Ant Design handles validation errors.
+      if (typeof error === "string") {
+        message.error(error);
+      } else if (error?.message) {
+        message.error(error.message);
+      }
+      // Ant Design validation errors are handled by the form.
+    }
+  };
+
+  /* =======================================================
+     PUBLISH HERO SECTION
+  ======================================================= */
+
+  const handlePublish = async () => {
+    try {
+      await dispatch(publishHomepageHero()).unwrap();
+
+      message.success("Homepage hero published successfully.");
+    } catch (error) {
+      message.error(
+        typeof error === "string"
+          ? error
+          : error?.message || "Failed to publish homepage hero."
+      );
     }
   };
 
@@ -162,11 +229,8 @@ const HomePage = () => {
 
   const uploadProps = {
     beforeUpload: () => false,
-
     maxCount: 1,
-
     accept: "image/*",
-
     listType: "picture-card",
   };
 
@@ -175,23 +239,12 @@ const HomePage = () => {
   ======================================================= */
 
   const initialValues = {
-    heroHeading:
-      homeContent.heroHeading,
-
-    heroDescription:
-      homeContent.heroDescription,
-
-    aboutSection:
-      homeContent.aboutSection,
-
-    featuredBlog:
-      homeContent.featuredBlog,
-
-    featuredResearch:
-      homeContent.featuredResearch,
-
-    importantAnnouncement:
-      homeContent.importantAnnouncement,
+    heroHeading: homeContent.heroHeading,
+    heroDescription: homeContent.heroDescription,
+    aboutSection: homeContent.aboutSection,
+    featuredBlog: homeContent.featuredBlog,
+    featuredResearch: homeContent.featuredResearch,
+    importantAnnouncement: homeContent.importantAnnouncement,
   };
 
   /* =======================================================
@@ -200,7 +253,6 @@ const HomePage = () => {
 
   return (
     <div>
-
       {/* =================================================
           PAGE HEADER
       ================================================= */}
@@ -216,22 +268,16 @@ const HomePage = () => {
         }}
       >
         <div>
-          <Title
-            level={3}
-            style={{
-              marginBottom: 4,
-            }}
-          >
+          <Title level={3} style={{ marginBottom: 4 }}>
             Home Page Management
           </Title>
 
           <Text type="secondary">
-            Manage the content displayed on the
-            public FloodGuard home page.
+            Manage the content displayed on the public FloodGuard home page.
           </Text>
         </div>
 
-        <Space>
+        <Space wrap>
           <Button
             icon={<EyeOutlined />}
             onClick={handlePreview}
@@ -242,9 +288,20 @@ const HomePage = () => {
           <Button
             type="primary"
             icon={<SaveOutlined />}
+            loading={heroSaving}
             onClick={handleSave}
           >
             Save Changes
+          </Button>
+
+          <Button
+            type="primary"
+            icon={<CloudUploadOutlined />}
+            loading={heroPublishing}
+            disabled={!hero}
+            onClick={handlePublish}
+          >
+            Publish
           </Button>
         </Space>
       </div>
@@ -253,18 +310,24 @@ const HomePage = () => {
           STATUS
       ================================================= */}
 
-      <Card
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <Space>
-          <Tag color="success">
-            Published
-          </Tag>
+      <Card style={{ marginBottom: 24 }}>
+        <Space wrap>
+          {hero?.status === "published" ? (
+            <Tag color="success">Published</Tag>
+          ) : (
+            <Tag color="warning">
+              {hero ? "Draft" : "Not Saved"}
+            </Tag>
+          )}
 
           <Text type="secondary">
-            Current homepage configuration
+            {heroLoading
+              ? "Loading homepage configuration..."
+              : hero?.published_at
+                ? `Last published: ${new Date(
+                    hero.published_at
+                  ).toLocaleString()}`
+                : "Manage your homepage configuration"}
           </Text>
         </Space>
       </Card>
@@ -278,7 +341,6 @@ const HomePage = () => {
         layout="vertical"
         initialValues={initialValues}
       >
-
         {/* =================================================
             HERO SECTION
         ================================================= */}
@@ -290,28 +352,20 @@ const HomePage = () => {
               <span>Hero Section</span>
             </Space>
           }
-          style={{
-            marginBottom: 24,
-          }}
+          style={{ marginBottom: 24 }}
+          loading={heroLoading}
         >
-
           <Row gutter={24}>
-
             {/* HERO TEXT */}
 
-            <Col
-              xs={24}
-              lg={14}
-            >
-
+            <Col xs={24} lg={14}>
               <Form.Item
                 label="Hero Heading"
                 name="heroHeading"
                 rules={[
                   {
                     required: true,
-                    message:
-                      "Please enter the hero heading.",
+                    message: "Please enter the hero heading.",
                   },
                 ]}
               >
@@ -329,8 +383,7 @@ const HomePage = () => {
                 rules={[
                   {
                     required: true,
-                    message:
-                      "Please enter the hero description.",
+                    message: "Please enter the hero description.",
                   },
                 ]}
               >
@@ -341,57 +394,38 @@ const HomePage = () => {
                   showCount
                 />
               </Form.Item>
-
             </Col>
 
             {/* HERO IMAGE */}
 
-            <Col
-              xs={24}
-              lg={10}
-            >
-
+            <Col xs={24} lg={10}>
               <Form.Item
                 label="Hero Image"
                 name="heroImage"
                 valuePropName="fileList"
-                getValueFromEvent={(event) =>
-                  event?.fileList
-                }
+                getValueFromEvent={(event) => event?.fileList}
               >
-
-                <Upload
-                  {...uploadProps}
-                >
+                <Upload {...uploadProps}>
                   <div>
-                    <PictureOutlined
-                      style={{
-                        fontSize: 28,
-                      }}
-                    />
+                    <PictureOutlined style={{ fontSize: 28 }} />
 
-                    <div
-                      style={{
-                        marginTop: 8,
-                      }}
-                    >
+                    <div style={{ marginTop: 8 }}>
                       Upload Hero Image
                     </div>
                   </div>
                 </Upload>
-
               </Form.Item>
 
               <Text type="secondary">
-                Recommended: high-resolution
-                landscape image suitable for the
-                homepage hero section.
+                Recommended: high-resolution landscape image suitable
+                for the homepage hero section.
               </Text>
 
+              <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                Image upload will be connected to storage separately.
+              </Text>
             </Col>
-
           </Row>
-
         </Card>
 
         {/* =================================================
@@ -405,32 +439,25 @@ const HomePage = () => {
               <span>About Section</span>
             </Space>
           }
-          style={{
-            marginBottom: 24,
-          }}
+          style={{ marginBottom: 24 }}
         >
-
           <Form.Item
             label="About Section"
             name="aboutSection"
             rules={[
               {
                 required: true,
-                message:
-                  "Please enter the about section content.",
+                message: "Please enter the about section content.",
               },
             ]}
           >
-
             <TextArea
               rows={8}
               placeholder="Enter information about FloodGuard..."
               maxLength={2000}
               showCount
             />
-
           </Form.Item>
-
         </Card>
 
         {/* =================================================
@@ -444,32 +471,22 @@ const HomePage = () => {
               <span>Featured Content</span>
             </Space>
           }
-          style={{
-            marginBottom: 24,
-          }}
+          style={{ marginBottom: 24 }}
         >
-
           <Row gutter={24}>
-
             {/* FEATURED BLOG */}
 
-            <Col
-              xs={24}
-              md={12}
-            >
-
+            <Col xs={24} md={12}>
               <Form.Item
                 label="Featured Blog"
                 name="featuredBlog"
                 rules={[
                   {
                     required: true,
-                    message:
-                      "Please select a featured blog.",
+                    message: "Please select a featured blog.",
                   },
                 ]}
               >
-
                 <Select
                   size="large"
                   placeholder="Select featured blog"
@@ -477,35 +494,27 @@ const HomePage = () => {
                   optionFilterProp="label"
                   showSearch
                 />
-
               </Form.Item>
 
               <Text type="secondary">
-                This blog will be displayed in the
-                featured blog section of the homepage.
+                This blog will be displayed in the featured blog section
+                of the homepage.
               </Text>
-
             </Col>
 
             {/* FEATURED RESEARCH */}
 
-            <Col
-              xs={24}
-              md={12}
-            >
-
+            <Col xs={24} md={12}>
               <Form.Item
                 label="Featured Research"
                 name="featuredResearch"
                 rules={[
                   {
                     required: true,
-                    message:
-                      "Please select featured research.",
+                    message: "Please select featured research.",
                   },
                 ]}
               >
-
                 <Select
                   size="large"
                   placeholder="Select featured research"
@@ -513,18 +522,14 @@ const HomePage = () => {
                   optionFilterProp="label"
                   showSearch
                 />
-
               </Form.Item>
 
               <Text type="secondary">
-                This research item will be displayed
-                in the featured research section.
+                This research item will be displayed in the featured
+                research section.
               </Text>
-
             </Col>
-
           </Row>
-
         </Card>
 
         {/* =================================================
@@ -538,32 +543,25 @@ const HomePage = () => {
               <span>Important Announcement</span>
             </Space>
           }
-          style={{
-            marginBottom: 24,
-          }}
+          style={{ marginBottom: 24 }}
         >
-
           <Form.Item
             label="Important Announcement"
             name="importantAnnouncement"
             rules={[
               {
                 required: true,
-                message:
-                  "Please enter an important announcement.",
+                message: "Please enter an important announcement.",
               },
             ]}
           >
-
             <TextArea
               rows={5}
               placeholder="Enter an important announcement for visitors..."
               maxLength={500}
               showCount
             />
-
           </Form.Item>
-
         </Card>
 
         {/* =================================================
@@ -571,7 +569,6 @@ const HomePage = () => {
         ================================================= */}
 
         <Card>
-
           <div
             style={{
               display: "flex",
@@ -580,7 +577,6 @@ const HomePage = () => {
               flexWrap: "wrap",
             }}
           >
-
             <Button
               icon={<EyeOutlined />}
               onClick={handlePreview}
@@ -591,15 +587,23 @@ const HomePage = () => {
             <Button
               type="primary"
               icon={<SaveOutlined />}
+              loading={heroSaving}
               onClick={handleSave}
             >
               Save Changes
             </Button>
 
+            <Button
+              type="primary"
+              icon={<CloudUploadOutlined />}
+              loading={heroPublishing}
+              disabled={!hero}
+              onClick={handlePublish}
+            >
+              Publish Homepage
+            </Button>
           </div>
-
         </Card>
-
       </Form>
 
       {/* =================================================
@@ -609,56 +613,37 @@ const HomePage = () => {
       <Modal
         title="Homepage Preview"
         open={previewVisible}
-        onCancel={() =>
-          setPreviewVisible(false)
-        }
+        onCancel={() => setPreviewVisible(false)}
         footer={
-          <Button
-            onClick={() =>
-              setPreviewVisible(false)
-            }
-          >
+          <Button onClick={() => setPreviewVisible(false)}>
             Close Preview
           </Button>
         }
         width={900}
       >
-
         {/* HERO PREVIEW */}
 
         <div
           style={{
             padding: 32,
             borderRadius: 12,
-            background:
-              "linear-gradient(135deg, #e6f4ff, #f0f5ff)",
+            background: "linear-gradient(135deg, #e6f4ff, #f0f5ff)",
             marginBottom: 24,
           }}
         >
-
-          <Tag
-            color="blue"
-            style={{
-              marginBottom: 12,
-            }}
-          >
+          <Tag color="blue" style={{ marginBottom: 12 }}>
             FloodGuard
           </Tag>
 
           <Title level={2}>
-            {form.getFieldValue(
-              "heroHeading"
-            ) ||
+            {form.getFieldValue("heroHeading") ||
               homeContent.heroHeading}
           </Title>
 
           <Paragraph>
-            {form.getFieldValue(
-              "heroDescription"
-            ) ||
+            {form.getFieldValue("heroDescription") ||
               homeContent.heroDescription}
           </Paragraph>
-
         </div>
 
         {/* ABOUT */}
@@ -666,102 +651,46 @@ const HomePage = () => {
         <Card
           size="small"
           title="About FloodGuard"
-          style={{
-            marginBottom: 16,
-          }}
+          style={{ marginBottom: 16 }}
         >
-
           <Text>
-            {form.getFieldValue(
-              "aboutSection"
-            ) ||
+            {form.getFieldValue("aboutSection") ||
               homeContent.aboutSection}
           </Text>
-
         </Card>
 
         {/* FEATURED CONTENT */}
 
         <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Featured Blog">
+              <Tag color="blue">Blog</Tag>
 
-          <Col
-            xs={24}
-            md={12}
-          >
-
-            <Card
-              size="small"
-              title="Featured Blog"
-            >
-
-              <Tag color="blue">
-                Blog
-              </Tag>
-
-              <Title
-                level={4}
-                style={{
-                  marginTop: 12,
-                }}
-              >
-                {
-                  blogOptions.find(
-                    (blog) =>
-                      blog.value ===
-                      (
-                        form.getFieldValue(
-                          "featuredBlog"
-                        ) ||
-                        homeContent.featuredBlog
-                      )
-                  )?.label ||
-                  "No blog selected"
-                }
+              <Title level={4} style={{ marginTop: 12 }}>
+                {blogOptions.find(
+                  (blog) =>
+                    blog.value ===
+                    (form.getFieldValue("featuredBlog") ||
+                      homeContent.featuredBlog)
+                )?.label || "No blog selected"}
               </Title>
-
             </Card>
-
           </Col>
 
-          <Col
-            xs={24}
-            md={12}
-          >
+          <Col xs={24} md={12}>
+            <Card size="small" title="Featured Research">
+              <Tag color="purple">Research</Tag>
 
-            <Card
-              size="small"
-              title="Featured Research"
-            >
-
-              <Tag color="purple">
-                Research
-              </Tag>
-
-              <Title
-                level={4}
-                style={{
-                  marginTop: 12,
-                }}
-              >
-                {
-                  researchOptions.find(
-                    (research) =>
-                      research.value ===
-                      (
-                        form.getFieldValue(
-                          "featuredResearch"
-                        ) ||
-                        homeContent.featuredResearch
-                      )
-                  )?.label ||
-                  "No research selected"
-                }
+              <Title level={4} style={{ marginTop: 12 }}>
+                {researchOptions.find(
+                  (research) =>
+                    research.value ===
+                    (form.getFieldValue("featuredResearch") ||
+                      homeContent.featuredResearch)
+                )?.label || "No research selected"}
               </Title>
-
             </Card>
-
           </Col>
-
         </Row>
 
         <Divider />
@@ -777,18 +706,12 @@ const HomePage = () => {
             </Space>
           }
         >
-
           <Text>
-            {form.getFieldValue(
-              "importantAnnouncement"
-            ) ||
+            {form.getFieldValue("importantAnnouncement") ||
               homeContent.importantAnnouncement}
           </Text>
-
         </Card>
-
       </Modal>
-
     </div>
   );
 };

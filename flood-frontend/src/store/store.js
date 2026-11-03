@@ -11,6 +11,7 @@ import newsReducer from "./slices/newsSlice";
 import faqReducer from "./slices/faqSlice";
 import emergencyReducer from "./slices/emergencySlice";
 import riverLevelReducer from "./slices/riverLevelSlice";
+import homepageHeroReducer from "./slices/homepageHeroSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -24,5 +25,6 @@ export const store = configureStore({
     faqs: faqReducer,
     emergency: emergencyReducer,
     riverLevel: riverLevelReducer,
+    homepageHero: homepageHeroReducer,
   },
 });
