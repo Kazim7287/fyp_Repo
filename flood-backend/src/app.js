@@ -88,6 +88,14 @@ const environmentalExportRoutes = require(
 );
 
 // =========================================================
+// HOMEPAGE HERO ROUTES
+// =========================================================
+
+const homepageHeroRoutes = require(
+  "./routes/homepageHero.routes"
+);
+
+// =========================================================
 // EXPRESS APP
 // =========================================================
 
@@ -98,18 +106,12 @@ const app = express();
 // =========================================================
 
 const allowedOrigins = [
-  // -------------------------------------------------------
   // Local development
-  // -------------------------------------------------------
-
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
 
-  // -------------------------------------------------------
   // Production frontend
-  // -------------------------------------------------------
-
   "http://16.171.225.118",
   "http://13.61.106.220",
   "http://floodforecast.duckdns.org",
@@ -120,8 +122,7 @@ const allowedOrigins = [
 // =========================================================
 
 if (process.env.FRONTEND_URL) {
-  const frontendUrl =
-    process.env.FRONTEND_URL.trim();
+  const frontendUrl = process.env.FRONTEND_URL.trim();
 
   if (
     frontendUrl &&
@@ -138,35 +139,20 @@ if (process.env.FRONTEND_URL) {
 app.use(
   cors({
     origin: (origin, callback) => {
-      // ---------------------------------------------------
-      // Requests without Origin
-      // curl, Postman, server-to-server, etc.
-      // ---------------------------------------------------
-
       if (!origin) {
         return callback(null, true);
       }
 
-      // ---------------------------------------------------
-      // Allowed origin
-      // ---------------------------------------------------
-
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-
-      // ---------------------------------------------------
-      // Block unknown origin
-      // ---------------------------------------------------
 
       console.error(
         `❌ CORS blocked origin: ${origin}`
       );
 
       return callback(
-        new Error(
-          `CORS blocked origin: ${origin}`
-        )
+        new Error(`CORS blocked origin: ${origin}`)
       );
     },
 
@@ -214,11 +200,7 @@ app.use(cookieParser());
 app.use(
   "/uploads",
   express.static(
-    path.join(
-      __dirname,
-      "..",
-      "uploads"
-    )
+    path.join(__dirname, "..", "uploads")
   )
 );
 
@@ -226,317 +208,219 @@ app.use(
 // ROOT HEALTH CHECK
 // =========================================================
 
-app.get(
-  "/",
-  (req, res) => {
-    return res.status(200).json({
-      success: true,
-      message:
-        "Flood Forecasting API is running",
-    });
-  }
-);
+app.get("/", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Flood Forecasting API is running",
+  });
+});
 
 // =========================================================
 // DATABASE TEST
 // =========================================================
 
-app.get(
-  "/db-test",
-  async (req, res) => {
-    try {
-      const result =
-        await pool.query(
-          "SELECT NOW() AS current_time"
-        );
+app.get("/db-test", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT NOW() AS current_time"
+    );
 
-      return res.status(200).json({
-        success: true,
-        message:
-          "PostgreSQL connected successfully",
-        time:
-          result.rows[0].current_time,
-      });
-    } catch (error) {
-      console.error(
-        "❌ Database test failed:",
-        error
-      );
+    return res.status(200).json({
+      success: true,
+      message: "PostgreSQL connected successfully",
+      time: result.rows[0].current_time,
+    });
+  } catch (error) {
+    console.error("❌ Database test failed:", error);
 
-      return res.status(500).json({
-        success: false,
-        message:
-          "PostgreSQL connection failed",
+    return res.status(500).json({
+      success: false,
+      message: "PostgreSQL connection failed",
 
-        ...(process.env.NODE_ENV !==
-          "production" && {
-          error: error.message,
-        }),
-      });
-    }
+      ...(process.env.NODE_ENV !== "production" && {
+        error: error.message,
+      }),
+    });
   }
-);
+});
 
 // =========================================================
 // INFLUXDB CONNECTION TEST
 // =========================================================
 
-app.get(
-  "/influxdb-test",
-  async (req, res) => {
-    try {
-      // ---------------------------------------------------
-      // Validate environment variables
-      // ---------------------------------------------------
-
-      if (
-        !process.env.INFLUXDB_URL ||
-        !process.env.INFLUXDB_TOKEN ||
-        !process.env.INFLUXDB_ORG ||
-        !process.env.INFLUXDB_BUCKET
-      ) {
-        return res.status(500).json({
-          success: false,
-          message:
-            "InfluxDB environment variables are missing",
-        });
-      }
-
-      // ---------------------------------------------------
-      // Simple InfluxDB query
-      // ---------------------------------------------------
-
-      const query =
-        `from(bucket: "${process.env.INFLUXDB_BUCKET}") ` +
-        `|> range(start: -1m) ` +
-        `|> limit(n: 1)`;
-
-      let foundData = false;
-
-      await new Promise(
-        (resolve, reject) => {
-          influxQueryApi.queryRows(
-            query,
-            {
-              next(row, tableMeta) {
-                foundData = true;
-              },
-
-              error(error) {
-                reject(error);
-              },
-
-              complete() {
-                resolve();
-              },
-            }
-          );
-        }
-      );
-
-      return res.status(200).json({
-        success: true,
-
-        message:
-          "InfluxDB connection successful",
-
-        bucket:
-          process.env.INFLUXDB_BUCKET,
-
-        organization:
-          process.env.INFLUXDB_ORG,
-
-        dataFound:
-          foundData,
-      });
-    } catch (error) {
-      console.error(
-        "❌ InfluxDB test failed:",
-        error
-      );
-
+app.get("/influxdb-test", async (req, res) => {
+  try {
+    if (
+      !process.env.INFLUXDB_URL ||
+      !process.env.INFLUXDB_TOKEN ||
+      !process.env.INFLUXDB_ORG ||
+      !process.env.INFLUXDB_BUCKET
+    ) {
       return res.status(500).json({
         success: false,
-
-        message:
-          "InfluxDB connection failed",
-
-        ...(process.env.NODE_ENV !==
-          "production" && {
-          error: error.message,
-        }),
+        message: "InfluxDB environment variables are missing",
       });
     }
+
+    const query =
+      `from(bucket: "${process.env.INFLUXDB_BUCKET}") ` +
+      `|> range(start: -1m) ` +
+      `|> limit(n: 1)`;
+
+    let foundData = false;
+
+    await new Promise((resolve, reject) => {
+      influxQueryApi.queryRows(query, {
+        next(row, tableMeta) {
+          foundData = true;
+        },
+
+        error(error) {
+          reject(error);
+        },
+
+        complete() {
+          resolve();
+        },
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "InfluxDB connection successful",
+      bucket: process.env.INFLUXDB_BUCKET,
+      organization: process.env.INFLUXDB_ORG,
+      dataFound: foundData,
+    });
+  } catch (error) {
+    console.error("❌ InfluxDB test failed:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "InfluxDB connection failed",
+
+      ...(process.env.NODE_ENV !== "production" && {
+        error: error.message,
+      }),
+    });
   }
-);
+});
 
 // =========================================================
 // SENSOR API HEALTH CHECK
 // =========================================================
 
-app.get(
-  "/api/sensors/health",
-  (req, res) => {
-    return res.status(200).json({
-      success: true,
-      message:
-        "Sensor API is running",
-    });
-  }
-);
+app.get("/api/sensors/health", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Sensor API is running",
+  });
+});
 
 // =========================================================
 // AUTH ROUTES
 // =========================================================
 
-app.use(
-  "/api/auth",
-  authRoutes
-);
+app.use("/api/auth", authRoutes);
 
 // =========================================================
 // USER ROUTES
 // =========================================================
 
-app.use(
-  "/api/users",
-  usersRoutes
-);
+app.use("/api/users", usersRoutes);
 
 // =========================================================
 // ADMIN ROUTES
 // =========================================================
 
-app.use(
-  "/api/admin",
-  adminRoutes
-);
+app.use("/api/admin", adminRoutes);
 
 // =========================================================
 // SENSOR ROUTES
 // =========================================================
-//
-// Existing:
-//
-// POST /api/sensors/
-//
-// from:
-// sensor.routes.js
-//
-// =========================================================
 
-app.use(
-  "/api/sensors",
-  sensorRoutes
-);
+app.use("/api/sensors", sensorRoutes);
 
 // =========================================================
 // TOLTHAWK SENSOR ROUTES
 // =========================================================
-//
-// Tolthawk:
-//
-// GET /api/sensors/data
-//
-// from:
-// sensorRoutes.js
-//
-// =========================================================
 
-app.use(
-  "/api/sensors",
-  sensorRoutesNew
-);
+app.use("/api/sensors", sensorRoutesNew);
 
 // =========================================================
 // COMPONENT LIBRARY ROUTES
 // =========================================================
 
-app.use(
-  "/api/components",
-  componentRoutes
-);
+app.use("/api/components", componentRoutes);
 
 // =========================================================
 // NODE / IOT INFRASTRUCTURE ROUTES
 // =========================================================
 
+app.use("/api/nodes", nodeRoutes);
+
+// =========================================================
+// HOMEPAGE HERO ROUTES
+// =========================================================
+//
+// GET    /api/homepage-hero
+// PUT    /api/homepage-hero
+// PATCH  /api/homepage-hero/publish
+//
+// =========================================================
+
 app.use(
-  "/api/nodes",
-  nodeRoutes
+  "/api/homepage-hero",
+  homepageHeroRoutes
 );
 
 // =========================================================
 // ALERT MANAGEMENT ROUTES
 // =========================================================
 
-app.use(
-  "/api/alerts",
-  alertRoutes
-);
+app.use("/api/alerts", alertRoutes);
 
 // =========================================================
 // BLOG MANAGEMENT ROUTES
 // =========================================================
 
-app.use(
-  "/api/blogs",
-  blogRoutes
-);
+app.use("/api/blogs", blogRoutes);
 
 // =========================================================
 // RESEARCH MANAGEMENT ROUTES
 // =========================================================
 
-app.use(
-  "/api/research",
-  researchRoutes
-);
+app.use("/api/research", researchRoutes);
 
 // =========================================================
 // ANNOUNCEMENT MANAGEMENT ROUTES
 // =========================================================
 
-app.use(
-  "/api/announcements",
-  announcementRoutes
-);
+app.use("/api/announcements", announcementRoutes);
 
 // =========================================================
 // NEWS MANAGEMENT ROUTES
 // =========================================================
 
-app.use(
-  "/api/news",
-  newsRoutes
-);
+app.use("/api/news", newsRoutes);
 
 // =========================================================
-// FAQ MANAGEMENT ROUTES
+// FAQ ROUTES
 // =========================================================
 
-app.use(
-  "/api/faqs",
-  faqRoutes
-);
+app.use("/api/faqs", faqRoutes);
 
 // =========================================================
 // EMERGENCY INFORMATION ROUTES
 // =========================================================
 
-app.use(
-  "/api/emergency-information",
-  emergencyRoutes
-);
+app.use("/api/emergency-information", emergencyRoutes);
 
 // =========================================================
 // ENVIRONMENTAL DATA ROUTES
 // =========================================================
 
-app.use(
-  "/api/environmental-data",
-  environmentalRoutes
-);
+app.use("/api/environmental-data", environmentalRoutes);
 
 // =========================================================
 // ENVIRONMENTAL DATA EXPORT ROUTES
@@ -551,77 +435,43 @@ app.use(
 // 404 HANDLER
 // =========================================================
 
-app.use(
-  (req, res) => {
-    return res.status(404).json({
-      success: false,
-
-      message:
-        `Route ${req.method} ${req.originalUrl} not found`,
-    });
-  }
-);
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+  });
+});
 
 // =========================================================
 // GLOBAL ERROR HANDLER
 // =========================================================
 
-app.use(
-  (
-    err,
-    req,
-    res,
-    next
-  ) => {
-    console.error(
-      "❌ Server error:",
-      err
-    );
+app.use((err, req, res, next) => {
+  console.error("❌ Server error:", err);
 
-    // -----------------------------------------------------
-    // CORS errors
-    // -----------------------------------------------------
-
-    if (
-      err.message?.startsWith(
-        "CORS blocked origin"
-      )
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: err.message,
-      });
-    }
-
-    // -----------------------------------------------------
-    // General errors
-    // -----------------------------------------------------
-
-    const statusCode =
-      err.status ||
-      err.statusCode ||
-      500;
-
-    return res.status(
-      statusCode
-    ).json({
+  // CORS errors
+  if (err.message?.startsWith("CORS blocked origin")) {
+    return res.status(403).json({
       success: false,
-
-      message:
-        err.message ||
-        "Internal server error",
-
-      // ---------------------------------------------------
-      // Never expose stack traces in production
-      // ---------------------------------------------------
-
-      ...(process.env.NODE_ENV !==
-        "production" && {
-        stack: err.stack,
-      }),
+      message: err.message,
     });
   }
-);
+
+  // General errors
+  const statusCode =
+    err.status ||
+    err.statusCode ||
+    500;
+
+  return res.status(statusCode).json({
+    success: false,
+    message: err.message || "Internal server error",
+
+    ...(process.env.NODE_ENV !== "production" && {
+      stack: err.stack,
+    }),
+  });
+});
 
 // =========================================================
 // EXPORT APP
