@@ -386,21 +386,7 @@ const AdminDashboard = () => {
       ================================================= */}
 
       <div className="dashboard-header">
-        <div>
-          <div className="breadcrumb">
-            <Text type="secondary">Admin</Text>
-            <span>/</span>
-            <Text strong>Dashboard</Text>
-          </div>
-
-          <Title level={2} className="dashboard-title">
-            System Overview
-          </Title>
-
-          <Text className="dashboard-subtitle">
-            Monitor flood conditions, sensor networks
-            and forecasting activity across monitoring locations.
-          </Text>
+        
         </div>
 
         <div className="header-actions">
