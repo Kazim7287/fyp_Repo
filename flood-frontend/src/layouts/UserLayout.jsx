@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Layout,
@@ -8,6 +9,7 @@ import {
   Dropdown,
   Button,
   Grid,
+  Drawer,
 } from "antd";
 
 import {
@@ -23,6 +25,9 @@ import {
   SettingOutlined,
   LogoutOutlined,
   MenuOutlined,
+  CloseOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -42,35 +47,84 @@ import {
   clearCredentials,
 } from "../store/slices/authSlice";
 
-const { Sider, Header, Content } = Layout;
+import "./styles/UserLayout.css";
+
+const { Sider, Content } = Layout;
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
+
+const USER_MENU_ITEMS = [
+  {
+    key: "/user/dashboard",
+    icon: <DashboardOutlined />,
+    label: "Dashboard",
+  },
+  {
+    key: "/user/flood-map",
+    icon: <EnvironmentOutlined />,
+    label: "Flood Map",
+  },
+  {
+    key: "/user/forecast",
+    icon: <LineChartOutlined />,
+    label: "Forecast",
+  },
+  {
+    key: "/user/current-conditions",
+    icon: <CloudOutlined />,
+    label: "Current Conditions",
+  },
+  {
+    key: "/user/alerts",
+    icon: <BellOutlined />,
+    label: "Alerts",
+  },
+  {
+    key: "/user/historical-floods",
+    icon: <HistoryOutlined />,
+    label: "Historical Floods",
+  },
+  {
+    key: "/user/flood-safety",
+    icon: <SafetyOutlined />,
+    label: "Flood Safety",
+  },
+  {
+    key: "/user/emergency-info",
+    icon: <AlertOutlined />,
+    label: "Emergency Info",
+  },
+  {
+    key: "/user/profile",
+    icon: <UserOutlined />,
+    label: "Profile",
+  },
+  {
+    key: "/user/settings",
+    icon: <SettingOutlined />,
+    label: "Settings",
+  },
+];
 
 const UserLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const screens = useBreakpoint();
 
-  const screens = Grid.useBreakpoint();
-
-  const isMobile = !screens.lg;
+  const isMobile = !screens.md;
+  const isTablet = Boolean(screens.md && !screens.lg);
 
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // =========================================================
-  // REDUX AUTHENTICATION STATE
-  // =========================================================
-
-  const user = useAppSelector(
-    (state) => state.auth.user
-  );
-
+  const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
 
   // =========================================================
   // USER INFORMATION
   // =========================================================
 
-  const userName =
-    user?.name || "User";
+  const userName = user?.name || "User";
 
   const userRole =
     user?.role === "common_user"
@@ -78,7 +132,7 @@ const UserLayout = () => {
       : user?.role || "User";
 
   const userInitial =
-    user?.name?.charAt(0)?.toUpperCase() || "U";
+    user?.name?.trim()?.charAt(0)?.toUpperCase() || "U";
 
   // =========================================================
   // RESPONSIVE SIDEBAR
@@ -86,11 +140,48 @@ const UserLayout = () => {
 
   useEffect(() => {
     if (isMobile) {
+      setCollapsed(false);
+      setMobileMenuOpen(false);
+      return;
+    }
+
+    if (isTablet) {
       setCollapsed(true);
-    } else {
+      return;
+    }
+
+    if (screens.lg) {
       setCollapsed(false);
     }
-  }, [isMobile]);
+  }, [isMobile, isTablet, screens.lg]);
+
+  // =========================================================
+  // ACTIVE MENU ITEM
+  // =========================================================
+
+  const selectedMenuKey = useMemo(() => {
+    const matchedItem = USER_MENU_ITEMS
+      .filter(
+        (item) =>
+          location.pathname === item.key ||
+          location.pathname.startsWith(`${item.key}/`)
+      )
+      .sort((a, b) => b.key.length - a.key.length)[0];
+
+    return matchedItem?.key || "/user/dashboard";
+  }, [location.pathname]);
+
+  const currentPageTitle = useMemo(() => {
+    const matchedItem = USER_MENU_ITEMS
+      .filter(
+        (item) =>
+          location.pathname === item.key ||
+          location.pathname.startsWith(`${item.key}/`)
+      )
+      .sort((a, b) => b.key.length - a.key.length)[0];
+
+    return matchedItem?.label || "Dashboard";
+  }, [location.pathname]);
 
   // =========================================================
   // NAVIGATION
@@ -98,77 +189,8 @@ const UserLayout = () => {
 
   const handleNavigation = (path) => {
     navigate(path);
-
-    if (isMobile) {
-      setCollapsed(true);
-    }
+    setMobileMenuOpen(false);
   };
-
-  // =========================================================
-  // MENU ITEMS
-  // =========================================================
-
-  const menuItems = [
-    {
-      key: "/user/dashboard",
-      icon: <DashboardOutlined />,
-      label: "Dashboard",
-    },
-
-    {
-      key: "/user/flood-map",
-      icon: <EnvironmentOutlined />,
-      label: "Flood Map",
-    },
-
-    {
-      key: "/user/forecast",
-      icon: <LineChartOutlined />,
-      label: "Forecast",
-    },
-
-    {
-      key: "/user/current-conditions",
-      icon: <CloudOutlined />,
-      label: "Current Conditions",
-    },
-
-    {
-      key: "/user/alerts",
-      icon: <BellOutlined />,
-      label: "Alerts",
-    },
-
-    {
-      key: "/user/historical-floods",
-      icon: <HistoryOutlined />,
-      label: "Historical Floods",
-    },
-
-    {
-      key: "/user/flood-safety",
-      icon: <SafetyOutlined />,
-      label: "Flood Safety",
-    },
-
-    {
-      key: "/user/emergency-info",
-      icon: <AlertOutlined />,
-      label: "Emergency Info",
-    },
-
-    {
-      key: "/user/profile",
-      icon: <UserOutlined />,
-      label: "Profile",
-    },
-
-    {
-      key: "/user/settings",
-      icon: <SettingOutlined />,
-      label: "Settings",
-    },
-  ];
 
   // =========================================================
   // LOGOUT
@@ -178,16 +200,9 @@ const UserLayout = () => {
     try {
       await logout();
     } catch (error) {
-      console.error(
-        "Logout error:",
-        error
-      );
+      console.error("Logout error:", error);
     } finally {
-
-      // Clear Redux authentication state
-      dispatch(
-        clearCredentials()
-      );
+      dispatch(clearCredentials());
 
       navigate("/login", {
         replace: true,
@@ -204,19 +219,16 @@ const UserLayout = () => {
       {
         key: "profile",
         icon: <UserOutlined />,
-        label: "Profile",
+        label: "My Profile",
       },
-
       {
         key: "settings",
         icon: <SettingOutlined />,
         label: "Settings",
       },
-
       {
         type: "divider",
       },
-
       {
         key: "logout",
         danger: true,
@@ -226,17 +238,12 @@ const UserLayout = () => {
     ],
 
     onClick: ({ key }) => {
-
       if (key === "profile") {
-        handleNavigation(
-          "/user/profile"
-        );
+        handleNavigation("/user/profile");
       }
 
       if (key === "settings") {
-        handleNavigation(
-          "/user/settings"
-        );
+        handleNavigation("/user/settings");
       }
 
       if (key === "logout") {
@@ -246,21 +253,107 @@ const UserLayout = () => {
   };
 
   // =========================================================
-  // CURRENT PAGE TITLE
+  // SIDEBAR CONTENT
   // =========================================================
 
-  const getPageTitle = () => {
-
-    const currentItem =
-      menuItems.find(
-        (item) =>
-          item.key ===
-          location.pathname
-      );
+  const renderSidebar = (drawer = false) => {
+    const sidebarCollapsed = drawer ? false : collapsed;
 
     return (
-      currentItem?.label ||
-      "Dashboard"
+      <div className="user-sidebar-inner">
+
+        {/* BRAND */}
+        <div className="user-sidebar-brand">
+          <div className="user-brand-mark">
+            FF
+          </div>
+
+          {!sidebarCollapsed && (
+            <div className="user-brand-text">
+              <Text className="user-brand-title">
+                Flood Forecasting
+              </Text>
+
+              <Text className="user-brand-subtitle">
+                Public Portal
+              </Text>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION LABEL */}
+        {!sidebarCollapsed && (
+          <div className="user-sidebar-section-label">
+            MAIN MENU
+          </div>
+        )}
+
+        {/* NAVIGATION */}
+        <div className="user-sidebar-menu">
+          <Menu
+            mode="inline"
+            theme="light"
+            selectedKeys={[selectedMenuKey]}
+            items={USER_MENU_ITEMS}
+            onClick={({ key }) => handleNavigation(key)}
+            inlineCollapsed={sidebarCollapsed}
+          />
+        </div>
+
+        {/* USER INFORMATION */}
+        <div className="user-sidebar-profile">
+          <Avatar
+            size={40}
+            className="user-sidebar-avatar"
+          >
+            {userInitial}
+          </Avatar>
+
+          {!sidebarCollapsed && (
+            <div className="user-sidebar-user-details">
+              <Text
+                strong
+                className="user-sidebar-user-name"
+                title={userName}
+              >
+                {userName}
+              </Text>
+
+              <Text className="user-sidebar-user-role">
+                {userRole}
+              </Text>
+            </div>
+          )}
+        </div>
+
+        {/* COLLAPSE CONTROL */}
+        {!drawer && (
+          <div className="user-sidebar-footer">
+            <Button
+              type="text"
+              className="user-sidebar-collapse-button"
+              icon={
+                collapsed
+                  ? <MenuUnfoldOutlined />
+                  : <MenuFoldOutlined />
+              }
+              onClick={() => {
+                setCollapsed((previous) => !previous);
+              }}
+              title={
+                collapsed
+                  ? "Expand sidebar"
+                  : "Collapse sidebar"
+              }
+              aria-label={
+                collapsed
+                  ? "Expand sidebar"
+                  : "Collapse sidebar"
+              }
+            />
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -269,547 +362,157 @@ const UserLayout = () => {
   // =========================================================
 
   return (
-    <Layout
-      style={{
-        minHeight: "100vh",
-        width: "100%",
-        overflow: "hidden",
-      }}
-    >
+    <Layout className="user-app-layout">
 
       {/* =====================================================
-          SIDEBAR
+          DESKTOP / TABLET SIDEBAR
       ===================================================== */}
 
-      <Sider
-        width={250}
-        theme="light"
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        breakpoint="lg"
-        collapsedWidth={
-          isMobile ? 0 : 80
-        }
-        trigger={null}
-        zeroWidthTriggerStyle={{
-          display: "none",
-        }}
-        style={{
-          height: "100vh",
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 1000,
-          borderRight:
-            "1px solid #f0f0f0",
-          overflow: "auto",
-
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-
-        {/* =================================================
-            LOGO
-        ================================================= */}
-
-        <div
-          style={{
-            height: 72,
-            minHeight: 72,
-
-            display: "flex",
-            alignItems: "center",
-
-            padding: collapsed
-              ? "0 20px"
-              : "0 22px",
-
-            borderBottom:
-              "1px solid #f0f0f0",
-
-            overflow: "hidden",
-            whiteSpace: "nowrap",
-          }}
+      {!isMobile && (
+        <Sider
+          className="user-desktop-sider"
+          width={250}
+          collapsedWidth={80}
+          collapsed={collapsed}
+          trigger={null}
         >
-
-          {/* LOGO */}
-
-          <div
-            style={{
-              flexShrink: 0,
-
-              width: 40,
-              height: 40,
-
-              borderRadius: 10,
-
-              background:
-                "linear-gradient(135deg, #1677ff, #0958d9)",
-
-              color: "#fff",
-
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-
-              fontWeight: 700,
-              fontSize: 15,
-            }}
-          >
-            FF
-          </div>
-
-          {/* BRAND TEXT */}
-
-          {!collapsed && (
-            <div
-              style={{
-                marginLeft: 12,
-                overflow: "hidden",
-              }}
-            >
-
-              <Text
-                strong
-                style={{
-                  display: "block",
-                  fontSize: 14,
-                }}
-              >
-                Flood Forecasting
-              </Text>
-
-              <Text
-                type="secondary"
-                style={{
-                  fontSize: 11,
-                }}
-              >
-                Public Portal
-              </Text>
-
-            </div>
-          )}
-
-        </div>
-
-        {/* =================================================
-            MENU
-        ================================================= */}
-
-        <Menu
-          mode="inline"
-          selectedKeys={[
-            location.pathname,
-          ]}
-          items={menuItems}
-          onClick={({ key }) =>
-            handleNavigation(key)
-          }
-          style={{
-            borderRight: 0,
-            marginTop: 10,
-
-            paddingBottom: 20,
-
-            flex: 1,
-          }}
-        />
-
-        {/* =================================================
-            USER INFORMATION
-        ================================================= */}
-
-        <div
-          style={{
-            padding: collapsed
-              ? "14px 20px"
-              : "14px 18px",
-
-            borderTop:
-              "1px solid #f0f0f0",
-
-            display: "flex",
-            alignItems: "center",
-
-            gap: 10,
-
-            minHeight: 70,
-
-            overflow: "hidden",
-          }}
-        >
-
-          {/* USER AVATAR */}
-
-          <Avatar
-            size={38}
-            style={{
-              background: "#e6f4ff",
-              color: "#1677ff",
-              fontWeight: 600,
-
-              flexShrink: 0,
-            }}
-          >
-            {userInitial}
-          </Avatar>
-
-          {/* USER DETAILS */}
-
-          {!collapsed && (
-            <div
-              style={{
-                minWidth: 0,
-
-                display: "flex",
-                flexDirection: "column",
-
-                lineHeight: 1.3,
-              }}
-            >
-
-              <Text
-                strong
-                style={{
-                  fontSize: 13,
-                  color: "#262626",
-
-                  overflow: "hidden",
-                  textOverflow:
-                    "ellipsis",
-                  whiteSpace:
-                    "nowrap",
-
-                  maxWidth: 170,
-                }}
-              >
-                {userName}
-              </Text>
-
-              <Text
-                type="secondary"
-                style={{
-                  fontSize: 11,
-                }}
-              >
-                {userRole}
-              </Text>
-
-            </div>
-          )}
-
-        </div>
-
-      </Sider>
+          {renderSidebar(false)}
+        </Sider>
+      )}
 
       {/* =====================================================
-          MAIN LAYOUT
+          MOBILE DRAWER
       ===================================================== */}
 
-      <Layout
-        style={{
-          marginLeft: isMobile
-            ? 0
-            : collapsed
-              ? 80
-              : 250,
-
-          transition:
-            "margin-left 0.2s",
-
-          minWidth: 0,
+      <Drawer
+        placement="left"
+        open={isMobile && mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        width={280}
+        closable={false}
+        destroyOnClose={false}
+        className="user-mobile-drawer"
+        styles={{
+          body: {
+            padding: 0,
+            overflow: "hidden",
+          },
+          content: {
+            background: "#ffffff",
+          },
         }}
+        title={null}
       >
+        <div className="user-mobile-drawer-header">
+          <span className="user-mobile-drawer-title">
+            Navigation
+          </span>
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+          <Button
+            type="text"
+            icon={<CloseOutlined />}
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close navigation"
+          />
+        </div>
 
-        <Header
-          style={{
-            height: 64,
-            lineHeight: "normal",
+        {renderSidebar(true)}
+      </Drawer>
 
-            background: "#fff",
+      {/* =====================================================
+          MAIN APPLICATION
+      ===================================================== */}
 
-            padding: isMobile
-              ? "0 16px"
-              : "0 24px",
+      <Layout className="user-main-layout">
 
-            display: "flex",
-            alignItems: "center",
-            justifyContent:
-              "space-between",
-
-            borderBottom:
-              "1px solid #f0f0f0",
-
-            position: "sticky",
-            top: 0,
-
-            zIndex: 900,
-          }}
-        >
+        {/* HEADER */}
+        <div className="user-header">
 
           {/* LEFT SIDE */}
+          <div className="user-header-left">
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-
-              minWidth: 0,
-            }}
-          >
-
-            {/* MOBILE MENU BUTTON */}
-
-            {isMobile && (
+            {isMobile ? (
               <Button
                 type="text"
+                className="user-mobile-menu-button"
+                icon={<MenuOutlined />}
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open navigation"
+              />
+            ) : (
+              <Button
+                type="text"
+                className="user-desktop-menu-button"
                 icon={
-                  <MenuOutlined />
+                  collapsed
+                    ? <MenuUnfoldOutlined />
+                    : <MenuFoldOutlined />
                 }
-                onClick={() =>
-                  setCollapsed(false)
-                }
-                style={{
-                  width: 40,
-                  height: 40,
-
-                  marginRight: 8,
-
-                  fontSize: 18,
+                onClick={() => {
+                  setCollapsed((previous) => !previous);
                 }}
+                aria-label="Toggle sidebar"
               />
             )}
 
-            {/* DESKTOP COLLAPSE BUTTON */}
-
-            {!isMobile && (
-              <Button
-                type="text"
-                onClick={() =>
-                  setCollapsed(
-                    !collapsed
-                  )
-                }
-                style={{
-                  marginRight: 10,
-                  fontSize: 16,
-                }}
-              >
-                ☰
-              </Button>
-            )}
-
-            {/* PAGE TITLE */}
-
-            <div
-              style={{
-                minWidth: 0,
-              }}
-            >
-
-              <Text
-                strong
-                style={{
-                  display: "block",
-
-                  fontSize: isMobile
-                    ? 14
-                    : 16,
-
-                  whiteSpace:
-                    "nowrap",
-
-                  overflow: "hidden",
-
-                  textOverflow:
-                    "ellipsis",
-
-                  maxWidth: isMobile
-                    ? 180
-                    : 400,
-                }}
-              >
-                {getPageTitle()}
+            <div className="user-header-page-info">
+              <Text className="user-header-page-title">
+                {currentPageTitle}
               </Text>
 
               {!isMobile && (
-                <Text
-                  type="secondary"
-                  style={{
-                    fontSize: 12,
-                  }}
-                >
+                <Text className="user-header-page-subtitle">
                   Stay informed. Stay safe.
                 </Text>
               )}
-
             </div>
-
           </div>
 
-          {/* =================================================
-              RIGHT SIDE
-          ================================================= */}
+          {/* RIGHT SIDE */}
+          <div className="user-header-right">
 
-          <Dropdown
-            menu={userMenu}
-            trigger={["click"]}
-            placement="bottomRight"
-          >
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-
-                gap: 9,
-
-                cursor: "pointer",
-
-                padding: "4px 6px",
-
-                borderRadius: 8,
-              }}
+            <Dropdown
+              menu={userMenu}
+              trigger={["click"]}
+              placement="bottomRight"
             >
-
-              {/* AVATAR */}
-
-              <Avatar
-                size={
-                  isMobile ? 36 : 40
-                }
-                style={{
-                  background:
-                    "#1677ff",
-
-                  color: "#fff",
-
-                  flexShrink: 0,
-                }}
+              <button
+                type="button"
+                className="user-header-profile"
+                aria-label="Open user menu"
               >
-                {userInitial}
-              </Avatar>
-
-              {/* NAME + ROLE */}
-
-              {!isMobile && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection:
-                      "column",
-
-                    lineHeight: 1.25,
-
-                    minWidth: 0,
-                  }}
+                <Avatar
+                  size={38}
+                  className="user-header-avatar"
                 >
+                  {userInitial}
+                </Avatar>
 
-                  <Text
-                    strong
-                    style={{
-                      fontSize: 13,
+                {!isMobile && (
+                  <div className="user-header-user-details">
+                    <Text className="user-header-user-name">
+                      {userName}
+                    </Text>
 
-                      maxWidth: 150,
+                    <Text className="user-header-user-role">
+                      {userRole}
+                    </Text>
+                  </div>
+                )}
+              </button>
+            </Dropdown>
 
-                      overflow:
-                        "hidden",
+          </div>
+        </div>
 
-                      textOverflow:
-                        "ellipsis",
-
-                      whiteSpace:
-                        "nowrap",
-                    }}
-                  >
-                    {userName}
-                  </Text>
-
-                  <Text
-                    type="secondary"
-                    style={{
-                      fontSize: 11,
-                    }}
-                  >
-                    {userRole}
-                  </Text>
-
-                </div>
-              )}
-
-            </div>
-
-          </Dropdown>
-
-        </Header>
-
-        {/* =================================================
-            CONTENT
-        ================================================= */}
-
-        <Content
-          style={{
-            background: "#f5f7fa",
-
-            padding: isMobile
-              ? 12
-              : 24,
-
-            minHeight:
-              "calc(100vh - 64px)",
-
-            width: "100%",
-
-            boxSizing: "border-box",
-
-            overflowX: "hidden",
-          }}
-        >
-
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 1600,
-              margin: "0 auto",
-            }}
-          >
+        {/* PAGE CONTENT */}
+        <Content className="user-content-scroll">
+          <div className="user-page-container">
             <Outlet />
           </div>
-
         </Content>
 
       </Layout>
-
-      {/* =====================================================
-          MOBILE SIDEBAR OVERLAY
-      ===================================================== */}
-
-      {isMobile &&
-        !collapsed && (
-          <div
-            onClick={() =>
-              setCollapsed(true)
-            }
-            style={{
-              position: "fixed",
-              inset: 0,
-
-              background:
-                "rgba(0, 0, 0, 0.35)",
-
-              zIndex: 999,
-            }}
-          />
-        )}
-
     </Layout>
   );
 };
