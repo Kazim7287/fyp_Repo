@@ -386,7 +386,13 @@ const AdminDashboard = () => {
       ================================================= */}
 
       <div className="dashboard-header">
-        
+        <div>
+          <div className="breadcrumb">
+            <Text type="secondary">Admin</Text>
+            <span>/</span>
+            <Text strong>Dashboard</Text>
+          </div>
+
         </div>
 
         <div className="header-actions">
