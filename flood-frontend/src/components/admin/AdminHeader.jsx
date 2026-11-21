@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import {
   Avatar,
   Dropdown,
-  Space,
   Typography,
   message,
 } from "antd";
@@ -13,6 +13,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   SettingOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
 
 import { logout } from "../../api/auth.api";
@@ -26,28 +27,38 @@ import {
   clearCredentials,
 } from "../../store/slices/authSlice";
 
-const { Title, Text } = Typography;
+import "./styles/AdminHeader.css";
+
+const { Text } = Typography;
+
+const ADMIN_PAGES = [
+  { path: "/admin/dashboard", title: "Dashboard" },
+  { path: "/admin/monitoring", title: "Live Monitoring" },
+  { path: "/admin/flood-map", title: "Flood Map" },
+  { path: "/admin/ai", title: "AI & Forecasting" },
+  { path: "/admin/environmental-data", title: "Environmental Data" },
+  { path: "/admin/iot", title: "IoT Infrastructure" },
+  { path: "/admin/alerts", title: "Alerts" },
+  { path: "/admin/reports", title: "Reports & Data" },
+  { path: "/admin/content", title: "Content Management" },
+  { path: "/admin/media-library", title: "Media Library" },
+  { path: "/admin/users", title: "Users" },
+  { path: "/admin/settings", title: "Settings" },
+  { path: "/admin/logs", title: "System Logs" },
+];
 
 const AdminHeader = () => {
   const navigate = useNavigate();
-
+  const location = useLocation();
   const dispatch = useAppDispatch();
 
-  // =========================================================
-  // AUTHENTICATED USER FROM REDUX
-  // =========================================================
-
-  const user = useAppSelector(
-    (state) => state.auth.user
-  );
+  const user = useAppSelector((state) => state.auth.user);
 
   const [loggingOut, setLoggingOut] = useState(false);
-
-  const [messageApi, contextHolder] =
-    message.useMessage();
+  const [messageApi, contextHolder] = message.useMessage();
 
   // =========================================================
-  // USER DISPLAY DATA
+  // USER INFORMATION
   // =========================================================
 
   const userName = user?.name || "Administrator";
@@ -55,10 +66,26 @@ const AdminHeader = () => {
   const userRole =
     user?.role === "admin"
       ? "System Admin"
-      : "User";
+      : user?.role || "User";
 
   const avatarLetter =
-    user?.name?.charAt(0)?.toUpperCase() || "U";
+    user?.name?.trim()?.charAt(0)?.toUpperCase() || "A";
+
+  // =========================================================
+  // DYNAMIC PAGE TITLE
+  // =========================================================
+
+  const pageTitle = useMemo(() => {
+    const matchedPage = ADMIN_PAGES
+      .filter(
+        (page) =>
+          location.pathname === page.path ||
+          location.pathname.startsWith(`${page.path}/`)
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0];
+
+    return matchedPage?.title || "Admin Dashboard";
+  }, [location.pathname]);
 
   // =========================================================
   // LOGOUT
@@ -72,40 +99,20 @@ const AdminHeader = () => {
     try {
       await logout();
 
-      // Clear Redux authentication state
-      dispatch(clearCredentials());
-
-      messageApi.success(
-        "Logged out successfully"
-      );
-
-      setTimeout(() => {
-        navigate("/login", {
-          replace: true,
-        });
-      }, 300);
-
+      messageApi.success("Logged out successfully");
     } catch (error) {
-      console.error(
-        "Logout error:",
-        error
-      );
-
-      // Even if backend logout fails,
-      // clear frontend authentication state.
-      dispatch(clearCredentials());
+      console.error("Logout error:", error);
 
       messageApi.warning(
-        "Session ended. Redirecting to login..."
+        "Your session has ended. Redirecting to login..."
       );
-
-      setTimeout(() => {
-        navigate("/login", {
-          replace: true,
-        });
-      }, 300);
-
     } finally {
+      dispatch(clearCredentials());
+
+      navigate("/login", {
+        replace: true,
+      });
+
       setLoggingOut(false);
     }
   };
@@ -118,150 +125,78 @@ const AdminHeader = () => {
     {
       key: "profile",
       icon: <UserOutlined />,
-      label: userName,
+      label: "My Profile",
     },
-
     {
       key: "settings",
       icon: <SettingOutlined />,
       label: "Account Settings",
     },
-
     {
       type: "divider",
     },
-
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "Logout",
+      label: loggingOut ? "Logging out..." : "Logout",
       danger: true,
+      disabled: loggingOut,
     },
   ];
-
-  // =========================================================
-  // MENU CLICK
-  // =========================================================
 
   const handleMenuClick = ({ key }) => {
     if (key === "profile") {
       navigate("/admin/profile");
-      return;
     }
 
     if (key === "settings") {
       navigate("/admin/settings");
-      return;
     }
 
     if (key === "logout") {
       handleLogout();
-      return;
     }
   };
 
   // =========================================================
-  // HEADER
+  // RENDER
   // =========================================================
 
   return (
     <>
       {contextHolder}
 
-      <header
-        style={{
-          height: 64,
-          width: "100%",
+      <header className="admin-header">
 
-          padding: "0 28px",
+        {/* LEFT: PAGE INFORMATION */}
+        <div className="admin-header-left">
+          <div className="admin-header-page-info">
+            <Text className="admin-header-page-title">
+              {pageTitle}
+            </Text>
 
-          background: "#ffffff",
-
-          borderBottom:
-            "1px solid #e8e8e8",
-
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-
-          boxSizing: "border-box",
-
-          flexShrink: 0,
-
-          position: "relative",
-          zIndex: 2000,
-        }}
-      >
-
-        {/* =================================================
-            LEFT SIDE
-        ================================================= */}
-
-        <div
-          style={{
-            minWidth: 0,
-          }}
-        >
-          <Title
-            level={4}
-            style={{
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 600,
-              color: "#1f1f1f",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Admin Dashboard
-          </Title>
+            <Text className="admin-header-page-subtitle">
+              Flood Forecasting & Monitoring System
+            </Text>
+          </div>
         </div>
 
-        {/* =================================================
-            RIGHT SIDE
-        ================================================= */}
-
-        <Space
-          size={22}
-          align="center"
-        >
+        {/* RIGHT: STATUS AND PROFILE */}
+        <div className="admin-header-right">
 
           {/* SYSTEM STATUS */}
-
-          <Space
-            size={8}
-            style={{
-              whiteSpace: "nowrap",
-            }}
+          <div
+            className="admin-system-status"
+            title="Application status indicator"
           >
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
+            <span className="admin-status-indicator" />
 
-                background: "#52c41a",
-
-                display: "inline-block",
-
-                boxShadow:
-                  "0 0 0 3px rgba(82,196,26,0.10)",
-              }}
-            />
-
-            <Text
-              type="secondary"
-              style={{
-                fontSize: 13,
-              }}
-            >
+            <Text className="admin-status-text">
               System Online
             </Text>
-          </Space>
+          </div>
 
-          {/* =================================================
-              PROFILE DROPDOWN
-          ================================================= */}
-
+          {/* PROFILE DROPDOWN */}
           <Dropdown
             menu={{
               items: profileMenuItems,
@@ -271,103 +206,31 @@ const AdminHeader = () => {
             placement="bottomRight"
             arrow
           >
-
-            <div
-              role="button"
-              tabIndex={0}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-
-                padding: "5px 8px",
-
-                borderRadius: 8,
-
-                cursor: loggingOut
-                  ? "wait"
-                  : "pointer",
-
-                userSelect: "none",
-
-                transition:
-                  "background 0.2s ease",
-
-                opacity: loggingOut
-                  ? 0.6
-                  : 1,
-              }}
-
-              onMouseEnter={(e) => {
-                if (!loggingOut) {
-                  e.currentTarget.style.background =
-                    "#f5f5f5";
-                }
-              }}
-
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background =
-                  "transparent";
-              }}
+            <button
+              type="button"
+              className="admin-header-profile"
+              disabled={loggingOut}
+              aria-label="Open administrator menu"
             >
-
-              {/* =================================================
-                  AVATAR
-              ================================================= */}
-
-              <Avatar
-                size={36}
-                style={{
-                  background: "#f0f5ff",
-                  color: "#1677ff",
-                  flexShrink: 0,
-                  fontWeight: 600,
-                }}
-              >
+              <Avatar className="admin-header-avatar">
                 {avatarLetter}
               </Avatar>
 
-              {/* =================================================
-                  USER INFO
-              ================================================= */}
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-
-                  lineHeight: 1.2,
-                }}
-              >
-
-                <Text
-                  strong
-                  style={{
-                    fontSize: 13,
-                    color: "#262626",
-                  }}
-                >
+              <div className="admin-header-user-info">
+                <Text className="admin-header-user-name">
                   {userName}
                 </Text>
 
-                <Text
-                  type="secondary"
-                  style={{
-                    fontSize: 11,
-                  }}
-                >
+                <Text className="admin-header-user-role">
                   {userRole}
                 </Text>
-
               </div>
 
-            </div>
-
+              <DownOutlined className="admin-header-dropdown-icon" />
+            </button>
           </Dropdown>
 
-        </Space>
-
+        </div>
       </header>
     </>
   );
