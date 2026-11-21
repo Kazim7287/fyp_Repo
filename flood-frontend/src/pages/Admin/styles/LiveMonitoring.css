@@ -1,0 +1,621 @@
+
+/* ============================================================
+   FLOODGUARD — LIVE MONITORING
+============================================================ */
+
+.live-monitoring-page {
+  --monitoring-primary: #1677ff;
+  --monitoring-ink: #172b4d;
+  --monitoring-border: #e8edf4;
+
+  color: var(--monitoring-ink);
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 24px;
+}
+
+.live-monitoring-page .ant-card {
+  border: 1px solid var(--monitoring-border);
+  border-radius: 14px;
+  box-shadow: 0 3px 14px rgba(20, 42, 74, 0.035);
+}
+
+/* ============================================================
+   PAGE HEADER
+============================================================ */
+
+.monitoring-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.monitoring-eyebrow {
+  margin-bottom: 8px;
+  color: #7185a2;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.35px;
+}
+
+.monitoring-heading-copy h2.ant-typography {
+  margin: 0 0 6px;
+  color: #172b4d;
+  font-size: clamp(24px, 2.2vw, 30px);
+  font-weight: 750;
+  letter-spacing: -0.7px;
+}
+
+.monitoring-heading-copy > .ant-typography {
+  font-size: 13px;
+}
+
+.monitoring-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 3px;
+  white-space: nowrap;
+}
+
+.monitoring-header-actions .ant-badge-status-text {
+  color: #687991;
+  font-size: 12px;
+}
+
+.monitoring-refresh-button {
+  height: 38px;
+  padding-inline: 15px;
+  border-radius: 9px;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(22, 119, 255, 0.08);
+}
+
+.monitoring-error-alert {
+  margin-bottom: 22px;
+  border-radius: 12px;
+}
+
+/* ============================================================
+   SECTION HEADING
+============================================================ */
+
+.monitoring-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+
+.monitoring-section-heading h5.ant-typography {
+  margin: 0 0 3px;
+  color: #203653;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.monitoring-section-heading .ant-typography,
+.monitoring-period-label {
+  font-size: 12px;
+}
+
+.monitoring-period-label {
+  white-space: nowrap;
+}
+
+.monitoring-period-label .anticon {
+  margin-right: 5px;
+}
+
+/* ============================================================
+   SUMMARY CARDS
+============================================================ */
+
+.monitoring-summary-row,
+.monitoring-feature-row {
+  margin-bottom: 20px;
+}
+
+.monitoring-stat-card {
+  height: 100%;
+  min-height: 132px;
+  overflow: hidden;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.monitoring-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(20, 42, 74, 0.07);
+}
+
+.monitoring-stat-card .ant-card-body {
+  padding: 19px 20px 16px;
+}
+
+.monitoring-stat-card .ant-statistic-title {
+  margin-bottom: 11px;
+  color: #738198;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.monitoring-stat-card .ant-statistic-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #203653;
+  font-size: 27px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.monitoring-stat-card .ant-statistic-content-prefix {
+  margin: 0;
+  line-height: 1;
+}
+
+.monitoring-stat-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+.monitoring-stat-icon.blue {
+  color: #1677ff;
+  background: #eaf3ff;
+}
+
+.monitoring-stat-icon.green {
+  color: #16845b;
+  background: #e8f7ef;
+}
+
+.monitoring-stat-icon.amber {
+  color: #c88719;
+  background: #fff5df;
+}
+
+.monitoring-stat-icon.red {
+  color: #cf3f4b;
+  background: #fff0f0;
+}
+
+.monitoring-stat-footnote {
+  display: block;
+  margin-top: 9px;
+  font-size: 11px;
+}
+
+/* ============================================================
+   CURRENT RIVER LEVEL
+============================================================ */
+
+.monitoring-current-card {
+  height: 100%;
+  color: #fff;
+  overflow: hidden;
+
+  background: linear-gradient(
+    120deg,
+    #102b50 0%,
+    #123e70 58%,
+    #1760a2 100%
+  );
+}
+
+.monitoring-current-card.ant-card {
+  border: 0;
+  box-shadow: 0 8px 24px rgba(15, 48, 86, 0.13);
+}
+
+.monitoring-current-card .ant-card-body {
+  position: relative;
+  min-height: 238px;
+  padding: 23px 25px 18px;
+}
+
+.monitoring-current-topline,
+.monitoring-current-reading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.monitoring-current-topline h4.ant-typography {
+  margin: 5px 0 0;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.monitoring-card-kicker {
+  color: #a9c7e8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+}
+
+.monitoring-current-icon {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  color: #d4e8ff;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 19px;
+}
+
+.monitoring-current-reading {
+  align-items: flex-end;
+  margin-top: 22px;
+}
+
+.monitoring-big-number {
+  color: #fff;
+  font-size: clamp(38px, 4vw, 48px);
+  font-weight: 750;
+  letter-spacing: -1.7px;
+  line-height: 1.05;
+}
+
+.monitoring-big-number span {
+  margin-left: 8px;
+  color: #b9d3ed;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.monitoring-current-reading .ant-typography {
+  color: #b7cce2;
+  font-size: 11px;
+}
+
+.monitoring-current-condition {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding-bottom: 3px;
+}
+
+.monitoring-current-condition .ant-tag {
+  margin: 0;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.monitoring-current-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  color: #b7cce2;
+  font-size: 11px;
+}
+
+.monitoring-current-footer .anticon {
+  margin-right: 5px;
+}
+
+/* ============================================================
+   DATA SUMMARY CARD
+============================================================ */
+
+.monitoring-data-card {
+  height: 100%;
+}
+
+.monitoring-data-card .ant-card-body {
+  padding: 21px 22px;
+}
+
+.monitoring-data-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 17px;
+}
+
+.monitoring-data-icon {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #1677ff;
+  background: #eaf3ff;
+  font-size: 17px;
+}
+
+.monitoring-data-card-heading h5.ant-typography {
+  margin: 0 0 2px;
+  color: #203653;
+  font-size: 14px;
+}
+
+.monitoring-data-card-heading .ant-typography {
+  font-size: 11px;
+}
+
+.monitoring-data-card .ant-statistic-title {
+  color: #738198;
+  font-size: 11px;
+}
+
+.monitoring-data-card .ant-statistic-content {
+  color: #203653;
+  font-size: 27px;
+  font-weight: 750;
+}
+
+.monitoring-data-divider {
+  height: 1px;
+  margin: 13px 0;
+  background: #edf1f6;
+}
+
+.monitoring-data-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 5px 0;
+}
+
+.monitoring-data-detail .ant-typography {
+  font-size: 11px;
+  text-align: right;
+}
+
+.monitoring-data-detail .ant-typography:first-child {
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   MONITORING TABLE
+============================================================ */
+
+.monitoring-table-card {
+  overflow: hidden;
+}
+
+.monitoring-table-card .ant-card-head {
+  min-height: 72px;
+  padding: 0 22px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.monitoring-table-card .ant-card-head-title {
+  padding: 15px 0;
+  white-space: normal;
+}
+
+.monitoring-table-card .ant-card-body {
+  padding: 0 20px 12px;
+}
+
+.monitoring-table-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.monitoring-table-title h5.ant-typography {
+  margin: 0 0 3px;
+  color: #203653;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.monitoring-table-title .ant-typography {
+  font-size: 11px;
+}
+
+.monitoring-record-count {
+  margin: 0;
+  padding: 3px 9px;
+  border: 1px solid #e2eaf5;
+  border-radius: 20px;
+  color: #526b8c;
+  background: #f5f8fc;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.monitoring-table-card .ant-table {
+  color: #344761;
+  font-size: 12px;
+}
+
+.monitoring-table-card .ant-table-thead > tr > th {
+  padding: 13px 12px;
+  color: #718096;
+  background: #f8fafd;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+.monitoring-table-card .ant-table-tbody > tr > td {
+  padding: 15px 12px;
+  border-bottom-color: #edf1f6;
+}
+
+.monitoring-clickable-row {
+  cursor: pointer;
+}
+
+.monitoring-clickable-row:hover > td {
+  background: #f7faff !important;
+}
+
+/* ============================================================
+   TABLE CONTENT
+============================================================ */
+
+.monitoring-node-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.monitoring-node-icon {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: #1677ff;
+  background: #edf5ff;
+  font-size: 15px;
+}
+
+.monitoring-node-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.monitoring-node-copy .ant-typography {
+  font-size: 12px;
+}
+
+.monitoring-cell-subtitle {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px !important;
+}
+
+.monitoring-level-value {
+  color: #1c3556;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.monitoring-status-tag {
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ============================================================
+   FOOTNOTE
+============================================================ */
+
+.monitoring-page-footnote {
+  margin-top: 13px;
+  padding: 0 3px;
+}
+
+.monitoring-page-footnote .ant-typography {
+  color: #8995a6;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.monitoring-page-footnote .anticon {
+  margin-right: 5px;
+  color: #c18b32;
+}
+
+/* ============================================================
+   TABLET AND MOBILE
+============================================================ */
+
+@media (max-width: 767px) {
+  .monitoring-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .monitoring-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .monitoring-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .monitoring-current-card .ant-card-body {
+    padding: 20px;
+  }
+
+  .monitoring-current-footer {
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .monitoring-data-detail {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .monitoring-stat-card .ant-card-body {
+    padding: 15px 13px 13px;
+  }
+
+  .monitoring-stat-card .ant-statistic-content {
+    gap: 7px;
+    font-size: 23px;
+  }
+
+  .monitoring-stat-icon {
+    width: 31px;
+    height: 31px;
+    font-size: 14px;
+  }
+
+  .monitoring-stat-footnote {
+    font-size: 9px;
+  }
+
+  .monitoring-current-reading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .monitoring-current-condition {
+    align-items: flex-start;
+  }
+
+  .monitoring-table-card .ant-card-head {
+    padding: 0 14px;
+  }
+
+  .monitoring-table-card .ant-card-body {
+    padding: 0 10px 8px;
+  }
+}
