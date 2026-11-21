@@ -37,7 +37,7 @@ import {
   CloudServerOutlined,
 } from "@ant-design/icons";
 
-import "./AdminDashboard.css";
+import "./styles/AdminDashboard.css";
 
 const { Title, Text } = Typography;
 
