@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 
+import "./styles/EnvironmentalData.css";
+
 import {
   Card,
   Typography,
@@ -16,7 +18,6 @@ import {
   Spin,
   Select,
   Button,
-  Divider,
   message,
   DatePicker,
 } from "antd";
@@ -1871,37 +1872,25 @@ const EnvironmentalData = () => {
     },
   ];
 
+
   /*
   |--------------------------------------------------------------------------
   | Loading Screen
   |--------------------------------------------------------------------------
   */
 
-  if (
-    weatherLoading &&
-    !weather
-  ) {
+  if (weatherLoading && !weather) {
     return (
-      <div
-        style={{
-          minHeight: 400,
-
-          display:
-            "flex",
-
-          justifyContent:
-            "center",
-
-          alignItems:
-            "center",
-        }}
-      >
-        <Spin
-          size="large"
-        />
+      <div className="environmental-loading">
+        <Spin size="large" />
+        <Text type="secondary">Loading environmental conditions...</Text>
       </div>
     );
   }
+
+  const selectedRangeLabel = customDateRange
+    ? "Custom date range"
+    : RANGE_OPTIONS.find((item) => item.value === selectedRange)?.label;
 
   /*
   |--------------------------------------------------------------------------
@@ -1910,651 +1899,438 @@ const EnvironmentalData = () => {
   */
 
   return (
-    <div>
-      {/* ================================================= */}
-      {/* PAGE HEADER */}
-      {/* ================================================= */}
+    <div className="environmental-page">
+      {/* PAGE HEADING */}
+      <section className="environmental-page-heading">
+        <div className="environmental-heading-copy">
+          <div className="environmental-eyebrow">
+            <span className="environmental-eyebrow-dot" />
+            ENVIRONMENTAL INTELLIGENCE
+          </div>
 
-      <div
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <Title
-          level={3}
-          style={{
-            marginBottom: 4,
-          }}
-        >
-          Environmental Data
-        </Title>
+          <Title level={2} className="environmental-page-title">
+            Environmental Data
+          </Title>
 
-        <Text type="secondary">
-          Monitor real-time
-          environmental
-          conditions, store
-          measurements in
-          InfluxDB Cloud, and
-          export historical
-          environmental data.
-        </Text>
-      </div>
+          <Text className="environmental-page-description">
+            Monitor current weather conditions, track environmental
+            measurements, and explore historical records for your selected
+            location.
+          </Text>
+        </div>
 
-      {/* ================================================= */}
+        <div className="environmental-heading-actions">
+          <Tag
+            className="environmental-location-tag"
+            icon={<EnvironmentOutlined />}
+          >
+            {location.name}, {location.country}
+          </Tag>
+
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => fetchWeather(location)}
+            loading={weatherLoading}
+          >
+            Refresh data
+          </Button>
+        </div>
+      </section>
+
       {/* LOCATION SEARCH */}
-      {/* ================================================= */}
-
-      <Card
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <Space
-          direction="vertical"
-          size={12}
-          style={{
-            width: "100%",
-          }}
-        >
-          <Space>
+      <Card className="environmental-card environmental-location-card">
+        <div className="environmental-section-heading">
+          <div className="environmental-section-icon">
             <EnvironmentOutlined />
+          </div>
 
-            <Text strong>
-              Select Monitoring
-              Location
+          <div>
+            <Text className="environmental-section-title">
+              Monitoring location
             </Text>
-          </Space>
+            <Text className="environmental-section-description">
+              Search for a city or area to view its environmental conditions.
+            </Text>
+          </div>
+        </div>
 
+        <div className="environmental-location-controls">
           <Select
             showSearch
             allowClear
-            value={
-              searchValue ||
-              undefined
-            }
-            placeholder="Search city or area e.g. Dubai, Nowshera, Lahore"
-            style={{
-              width: "100%",
-              maxWidth: 700,
-            }}
-            prefix={
-              <SearchOutlined />
-            }
-            filterOption={
-              false
-            }
-            onSearch={
-              searchLocations
-            }
-            onChange={
-              handleLocationChange
-            }
+            value={searchValue || undefined}
+            placeholder="Search city or area, e.g. Nowshera, Peshawar, Lahore"
+            className="environmental-location-select"
+            prefix={<SearchOutlined />}
+            filterOption={false}
+            onSearch={searchLocations}
+            onChange={handleLocationChange}
             notFoundContent={
               searchLoading ? (
-                <Spin
-                  size="small"
-                />
+                <Spin size="small" />
               ) : (
                 "No location found"
               )
             }
-            options={locations.map(
-              (item) => ({
-                value: `${item.latitude}-${item.longitude}`,
-
-                label: (
-                  <div>
-                    <Text strong>
-                      {item.name}
-                    </Text>
-
-                    <br />
-
-                    <Text type="secondary">
-                      {[
-                        item.admin2,
-                        item.admin1,
-                        item.country,
-                      ]
-                        .filter(
-                          Boolean
-                        )
-                        .join(
-                          ", "
-                        )}
-                    </Text>
-                  </div>
-                ),
-              })
-            )}
+            options={locations.map((item) => ({
+              value: `${item.latitude}-${item.longitude}`,
+              label: (
+                <div className="environmental-location-option">
+                  <Text strong>{item.name}</Text>
+                  <Text type="secondary">
+                    {[item.admin2, item.admin1, item.country]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </Text>
+                </div>
+              ),
+            }))}
           />
 
-          <Space wrap>
-            <Tag color="blue">
-              {location.name}
-            </Tag>
-
-            {location.admin1 && (
-              <Tag>
-                {location.admin1}
-              </Tag>
-            )}
-
-            <Tag>
-              {location.country}
-            </Tag>
-
-            <Text type="secondary">
-              📍{" "}
-              {Number(
-                location.latitude
-              ).toFixed(5)}
-              ,{" "}
-              {Number(
-                location.longitude
-              ).toFixed(5)}
+          <div className="environmental-location-meta">
+            <Tag color="blue">{location.name}</Tag>
+            {location.admin1 && <Tag>{location.admin1}</Tag>}
+            <Tag>{location.country}</Tag>
+            <Text type="secondary" className="environmental-coordinates">
+              {Number(location.latitude).toFixed(5)},{" "}
+              {Number(location.longitude).toFixed(5)}
             </Text>
-          </Space>
-        </Space>
+          </div>
+        </div>
       </Card>
 
-      {/* ================================================= */}
       {/* ERROR */}
-      {/* ================================================= */}
-
       {error && (
         <Alert
+          className="environmental-error"
           type="error"
           showIcon
-          message="Environmental Data Error"
+          message="Unable to retrieve environmental data"
           description={error}
-          style={{
-            marginBottom: 24,
-          }}
         />
       )}
 
-      {/* ================================================= */}
-      {/* LOCATION INFO */}
-      {/* ================================================= */}
+      {/* LIVE CONNECTION STRIP */}
+      <Card className="environmental-card environmental-status-card">
+        <div className="environmental-status-main">
+          <div className="environmental-status-heading">
+            <span className="environmental-status-pulse" />
+            <div>
+              <Text className="environmental-status-title">
+                Data collection status
+              </Text>
+              <Text className="environmental-status-subtitle">
+                {location.name} monitoring overview
+              </Text>
+            </div>
+          </div>
 
-      <Card
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <Space
-          wrap
-          size="middle"
-        >
-          <EnvironmentOutlined />
+          <div className="environmental-status-items">
+            <div className="environmental-status-item">
+              <span
+                className={`environmental-status-indicator ${
+                  socketConnected ? "is-online" : "is-offline"
+                }`}
+              />
+              <div>
+                <Text className="environmental-status-label">
+                  Socket.IO
+                </Text>
+                <Text className="environmental-status-value">
+                  {socketConnected ? "Connected" : "Disconnected"}
+                </Text>
+              </div>
+            </div>
 
-          <Text>
-            Monitoring Location:
-          </Text>
+            <div className="environmental-status-item">
+              <DatabaseOutlined className="environmental-status-icon" />
+              <div>
+                <Text className="environmental-status-label">
+                  InfluxDB Cloud
+                </Text>
+                <Text className="environmental-status-value">
+                  {savingData ? "Saving measurements..." : "Data ingestion"}
+                </Text>
+              </div>
+            </div>
 
-          <Text strong>
-            {location.name}
-          </Text>
-
-          {location.admin1 && (
-            <Text type="secondary">
-              {location.admin1}
-            </Text>
-          )}
-
-          <Text type="secondary">
-            {location.country}
-          </Text>
-
-          {/* Socket.IO Connection Status */}
-
-          <Tag
-            color={
-              socketConnected
-                ? "green"
-                : "red"
-            }
-          >
-            {socketConnected
-              ? "Real-Time Connected"
-              : "Real-Time Disconnected"}
-          </Tag>
-
-          {/* Last Socket.IO Update */}
-
-          {lastRealtimeUpdate && (
-            <Text type="secondary">
-              Last live update:{" "}
-              {lastRealtimeUpdate.toLocaleTimeString(
-                "en-PK"
-              )}
-            </Text>
-          )}
-
-          {/* InfluxDB Status */}
-
-          <Tag
-            color={
-              savingData
-                ? "processing"
-                : "success"
-            }
-            icon={
-              <DatabaseOutlined />
-            }
-          >
-            {savingData
-              ? "Saving to Cloud..."
-              : "Stored in InfluxDB Cloud"}
-          </Tag>
-
-          <Button
-            icon={
-              <ReloadOutlined />
-            }
-            onClick={() =>
-              fetchWeather(
-                location
-              )
-            }
-            loading={
-              weatherLoading
-            }
-          >
-            Refresh
-          </Button>
-        </Space>
+            <div className="environmental-status-item">
+              <HistoryOutlined className="environmental-status-icon" />
+              <div>
+                <Text className="environmental-status-label">
+                  Last live update
+                </Text>
+                <Text className="environmental-status-value">
+                  {lastRealtimeUpdate
+                    ? lastRealtimeUpdate.toLocaleTimeString("en-PK")
+                    : "Waiting for update"}
+                </Text>
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
 
-      {/* ================================================= */}
-      {/* STATISTICS */}
-      {/* ================================================= */}
+      {/* CURRENT CONDITIONS */}
+      <div className="environmental-section-header">
+        <div>
+          <Title level={4} className="environmental-section-heading-title">
+            Current conditions
+          </Title>
+          <Text className="environmental-section-heading-subtitle">
+            Latest available measurements for {location.name}
+          </Text>
+        </div>
 
-      <Row
-        gutter={[
-          16,
-          16,
-        ]}
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        {/* RAINFALL */}
+        <Tag color={weatherLoading ? "processing" : "success"}>
+          {weatherLoading ? "Updating" : "Latest available"}
+        </Tag>
+      </div>
 
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
+      <Row gutter={[16, 16]} className="environmental-metrics">
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="environmental-metric-card metric-rainfall">
+            <div className="environmental-metric-top">
+              <div className="environmental-metric-icon">
+                <CloudOutlined />
+              </div>
+              <Tag color="blue">Precipitation</Tag>
+            </div>
             <Statistic
               title="Rainfall"
-              value={
-                rainfall ??
-                0
-              }
-              precision={2}
-              suffix="mm"
-              prefix={
-                <CloudOutlined />
-              }
+              value={rainfall ?? "—"}
+              precision={rainfall == null ? undefined : 2}
+              suffix={rainfall == null ? "" : "mm"}
             />
-
-            <Text type="secondary">
-              Current precipitation
+            <Text className="environmental-metric-caption">
+              Current rainfall measurement
             </Text>
           </Card>
         </Col>
 
-        {/* TEMPERATURE */}
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="environmental-metric-card metric-temperature">
+            <div className="environmental-metric-top">
+              <div className="environmental-metric-icon">
+                <FireOutlined />
+              </div>
+              <Tag color="volcano">Atmosphere</Tag>
+            </div>
             <Statistic
               title="Temperature"
-              value={
-                temperature ??
-                0
-              }
-              precision={1}
-              suffix="°C"
-              prefix={
-                <FireOutlined />
-              }
+              value={temperature ?? "—"}
+              precision={temperature == null ? undefined : 1}
+              suffix={temperature == null ? "" : "°C"}
             />
-
-            <Text type="secondary">
-              2 m above ground
+            <Text className="environmental-metric-caption">
+              Air temperature at 2 m
             </Text>
           </Card>
         </Col>
 
-        {/* HUMIDITY */}
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
-            <Statistic
-              title="Humidity"
-              value={
-                humidity ??
-                0
-              }
-              precision={1}
-              suffix="%"
-              prefix={
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="environmental-metric-card metric-humidity">
+            <div className="environmental-metric-top">
+              <div className="environmental-metric-icon">
                 <ExperimentOutlined />
-              }
+              </div>
+              <Tag color="cyan">Moisture</Tag>
+            </div>
+            <Statistic
+              title="Relative humidity"
+              value={humidity ?? "—"}
+              precision={humidity == null ? undefined : 1}
+              suffix={humidity == null ? "" : "%"}
             />
-
-            <Text type="secondary">
-              Relative humidity
+            <Text className="environmental-metric-caption">
+              Moisture in the atmosphere
             </Text>
           </Card>
         </Col>
 
-        {/* WIND */}
-
-        <Col
-          xs={24}
-          sm={12}
-          lg={6}
-        >
-          <Card>
-            <Statistic
-              title="Wind Speed"
-              value={
-                windSpeed ??
-                0
-              }
-              precision={1}
-              suffix="km/h"
-              prefix={
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="environmental-metric-card metric-wind">
+            <div className="environmental-metric-top">
+              <div className="environmental-metric-icon">
                 <ThunderboltOutlined />
-              }
+              </div>
+              <Tag color="purple">Wind</Tag>
+            </div>
+            <Statistic
+              title="Wind speed"
+              value={windSpeed ?? "—"}
+              precision={windSpeed == null ? undefined : 1}
+              suffix={windSpeed == null ? "" : "km/h"}
             />
-
-            <Text type="secondary">
-              10 m above ground
+            <Text className="environmental-metric-caption">
+              Wind speed at 10 m
             </Text>
           </Card>
         </Col>
       </Row>
 
-      {/* ================================================= */}
-      {/* ENVIRONMENTAL TABLE */}
-      {/* ================================================= */}
+      {/* CURRENT MEASUREMENTS TABLE */}
+      <Card className="environmental-card environmental-table-card">
+        <div className="environmental-card-heading">
+          <div className="environmental-card-heading-copy">
+            <div className="environmental-section-icon">
+              <CloudOutlined />
+            </div>
+            <div>
+              <Text className="environmental-section-title">
+                Environmental measurements
+              </Text>
+              <Text className="environmental-section-description">
+                Current readings, condition levels, and data sources.
+              </Text>
+            </div>
+          </div>
 
-      <Card
-        title={
-          <Space>
-            <CloudOutlined />
+          <Tag color="blue">{data.length} parameters</Tag>
+        </div>
 
-            <span>
-              Environmental
-              Measurements
-            </span>
-          </Space>
-        }
-        style={{
-          marginBottom: 24,
-        }}
-      >
         <Table
+          className="environmental-table"
           rowKey="key"
-          columns={
-            columns
-          }
-          dataSource={
-            data
-          }
-          pagination={
-            false
-          }
-          loading={
-            weatherLoading
-          }
-          scroll={{
-            x: "max-content",
-          }}
+          columns={columns}
+          dataSource={data}
+          pagination={false}
+          loading={weatherLoading}
+          scroll={{ x: "max-content" }}
         />
+
+        <div className="environmental-table-footnote">
+          <Text type="secondary">
+            Weather observations supplied by Open-Meteo. Values reflect the
+            latest available response for the selected location.
+          </Text>
+        </div>
       </Card>
 
-      {/* ================================================= */}
-      {/* HISTORICAL DATA / EXPORT */}
-      {/* ================================================= */}
+      {/* HISTORICAL DATA */}
+      <Card className="environmental-card environmental-history-card">
+        <div className="environmental-card-heading environmental-history-heading">
+          <div className="environmental-card-heading-copy">
+            <div className="environmental-section-icon">
+              <HistoryOutlined />
+            </div>
+            <div>
+              <Text className="environmental-section-title">
+                Historical environmental data
+              </Text>
+              <Text className="environmental-section-description">
+                Review stored measurements and export records for analysis.
+              </Text>
+            </div>
+          </div>
 
-      <Card
-        title={
-          <Space>
-            <HistoryOutlined />
+          <Tag color="blue">{historicalData.length} records</Tag>
+        </div>
 
-            <span>
-              Historical Environmental Data
-            </span>
-          </Space>
-        }
-        extra={
-          <Tag color="blue">
-            {historicalData.length} Records
-          </Tag>
-        }
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        {/* FILTERS */}
+        <div className="environmental-history-toolbar">
+          <div className="environmental-history-filters">
+            <div className="environmental-filter-group">
+              <Text className="environmental-filter-label">
+                Time period
+              </Text>
+              <Select
+                value={selectedRange}
+                className="environmental-range-select"
+                options={RANGE_OPTIONS}
+                onChange={handleRangeChange}
+              />
+            </div>
 
-        <Space
-          wrap
-          size="middle"
-          style={{
-            marginBottom: 20,
-          }}
-        >
-          <Space>
-            <Text strong>
-              Time Range:
+            <div className="environmental-filter-group">
+              <Text className="environmental-filter-label">
+                Custom date range
+              </Text>
+              <RangePicker
+                showTime
+                className="environmental-date-picker"
+                onChange={handleCustomDateChange}
+                format="YYYY-MM-DD HH:mm"
+              />
+            </div>
+
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={fetchHistoricalData}
+              loading={historicalLoading}
+            >
+              Refresh history
+            </Button>
+          </div>
+
+          <div className="environmental-export-group">
+            <Text className="environmental-filter-label">
+              Export records
             </Text>
+            <Space wrap>
+              <Button
+                icon={<CodeOutlined />}
+                loading={exportLoading === "json"}
+                onClick={() => exportFile("json")}
+              >
+                JSON
+              </Button>
 
-            <Select
-              value={
-                selectedRange
-              }
-              style={{
-                width: 160,
-              }}
-              options={
-                RANGE_OPTIONS
-              }
-              onChange={
-                handleRangeChange
-              }
-            />
-          </Space>
+              <Button
+                icon={<FileExcelOutlined />}
+                loading={exportLoading === "excel"}
+                onClick={() => exportFile("excel")}
+              >
+                Excel
+              </Button>
 
-          <Space>
-            <Text strong>
-              Custom Range:
+              <Button
+                icon={<FilePdfOutlined />}
+                loading={exportLoading === "pdf"}
+                onClick={() => exportFile("pdf")}
+              >
+                PDF
+              </Button>
+            </Space>
+          </div>
+        </div>
+
+        <div className="environmental-filter-summary">
+          <div>
+            <Text className="environmental-summary-label">
+              Selected location
             </Text>
+            <Text strong>{location.name}</Text>
+          </div>
 
-            <RangePicker
-              showTime
-              onChange={
-                handleCustomDateChange
-              }
-              format="YYYY-MM-DD HH:mm"
-            />
-          </Space>
+          <div>
+            <Text className="environmental-summary-label">
+              Selected period
+            </Text>
+            <Text strong>{selectedRangeLabel}</Text>
+          </div>
 
-          <Button
-            icon={
-              <ReloadOutlined />
-            }
-            onClick={
-              fetchHistoricalData
-            }
-            loading={
-              historicalLoading
-            }
-          >
-            Refresh History
-          </Button>
-        </Space>
-
-        <Divider />
-
-        {/* EXPORT BUTTONS */}
-
-        <Space
-          wrap
-          size="middle"
-          style={{
-            marginBottom: 20,
-          }}
-        >
-          <Text strong>
-            Export Data:
-          </Text>
-
-          <Button
-            type="primary"
-            icon={
-              <CodeOutlined />
-            }
-            loading={
-              exportLoading ===
-              "json"
-            }
-            onClick={() =>
-              exportFile(
-                "json"
-              )
-            }
-          >
-            Export JSON
-          </Button>
-
-          <Button
-            icon={
-              <FileExcelOutlined />
-            }
-            loading={
-              exportLoading ===
-              "excel"
-            }
-            onClick={() =>
-              exportFile(
-                "excel"
-              )
-            }
-          >
-            Export Excel
-          </Button>
-
-          <Button
-            icon={
-              <FilePdfOutlined />
-            }
-            loading={
-              exportLoading ===
-              "pdf"
-            }
-            onClick={() =>
-              exportFile(
-                "pdf"
-              )
-            }
-          >
-            Export PDF
-          </Button>
-        </Space>
-
-        {/* FILTER SUMMARY */}
-
-        <Alert
-          type="info"
-          showIcon
-          message="Export Filter"
-          description={
-            <>
-              <Text>
-                Location:{" "}
-                <strong>
-                  {location.name}
-                </strong>
-              </Text>
-
-              <br />
-
-              <Text>
-                Period:{" "}
-                <strong>
-                  {customDateRange
-                    ? "Custom Date Range"
-                    : RANGE_OPTIONS.find(
-                        (
-                          item
-                        ) =>
-                          item.value ===
-                          selectedRange
-                      )?.label}
-                </strong>
-              </Text>
-
-              <br />
-
-              <Text>
-                Records available:{" "}
-                <strong>
-                  {
-                    historicalData.length
-                  }
-                </strong>
-              </Text>
-            </>
-          }
-          style={{
-            marginBottom: 20,
-          }}
-        />
-
-        {/* HISTORICAL TABLE */}
+          <div>
+            <Text className="environmental-summary-label">
+              Available records
+            </Text>
+            <Text strong>{historicalData.length}</Text>
+          </div>
+        </div>
 
         <Table
-          rowKey={(
-            record,
-            index
-          ) =>
+          className="environmental-table environmental-history-table"
+          rowKey={(record, index) =>
             `${record.timestamp}-${record.location}-${index}`
           }
-          columns={
-            historicalColumns
-          }
-          dataSource={
-            historicalData
-          }
-          loading={
-            historicalLoading
-          }
+          columns={historicalColumns}
+          dataSource={historicalData}
+          loading={historicalLoading}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
-            showTotal:
-              (total) =>
-                `Total ${total} records`,
+            showTotal: (total) => `Total ${total} records`,
           }}
-          scroll={{
-            x: 1100,
-          }}
+          scroll={{ x: 1100 }}
           locale={{
             emptyText:
               "No historical environmental data found for this location and time range.",
@@ -2562,57 +2338,25 @@ const EnvironmentalData = () => {
         />
       </Card>
 
-      {/* ================================================= */}
-      {/* DATA STORAGE INFORMATION */}
-      {/* ================================================= */}
+      {/* DATA INFORMATION */}
+      <footer className="environmental-page-footer">
+        <div className="environmental-footer-icon">
+          <DatabaseOutlined />
+        </div>
 
-      <Divider />
-
-      <Space
-        direction="vertical"
-        size={4}
-      >
-        <Text type="secondary">
-          Environmental data
-          provided by
-          Open-Meteo.
-        </Text>
-
-        <Text type="secondary">
-          Current measurements
-          are automatically
-          stored in InfluxDB
-          Cloud through the
-          Flood Forecasting
-          backend.
-        </Text>
-
-        <Text type="secondary">
-          Real-time updates are
-          delivered to the
-          dashboard through
-          Socket.IO.
-        </Text>
-
-        <Text type="secondary">
-          Historical measurements
-          can be filtered by
-          location and time
-          range.
-        </Text>
-
-        <Text type="secondary">
-          Historical data can
-          be exported in JSON,
-          Excel, and PDF formats.
-        </Text>
-
-        <Text type="secondary">
-          Location coordinates
-          are obtained through
-          Open-Meteo geocoding.
-        </Text>
-      </Space>
+        <div>
+          <Text className="environmental-footer-title">
+            Data sources and processing
+          </Text>
+          <Text className="environmental-footer-description">
+            Current weather data and location search are provided by
+            Open-Meteo. Measurements are submitted to the Flood Forecasting
+            backend for InfluxDB Cloud storage. Socket.IO delivers real-time
+            updates, while historical records can be filtered and exported
+            as JSON, Excel, or PDF.
+          </Text>
+        </div>
+      </footer>
     </div>
   );
 };

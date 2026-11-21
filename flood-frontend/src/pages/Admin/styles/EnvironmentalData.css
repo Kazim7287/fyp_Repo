@@ -1,0 +1,803 @@
+/* =========================================================
+   ENVIRONMENTAL DATA — ADMIN PAGE DESIGN
+   Matches FloodGuard admin navy / blue visual language
+========================================================= */
+
+.environmental-page {
+  --env-primary: #1677ff;
+  --env-primary-dark: #0958d9;
+  --env-text: #172b4d;
+  --env-muted: #718096;
+  --env-border: #e8edf4;
+  --env-surface: #ffffff;
+  --env-page: #f5f7fb;
+
+  width: 100%;
+  min-width: 0;
+  color: var(--env-text);
+  animation: environmental-page-enter 0.35s ease both;
+}
+
+@keyframes environmental-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.environmental-loading {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* =========================================================
+   PAGE HEADING
+========================================================= */
+
+.environmental-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.environmental-heading-copy {
+  min-width: 0;
+}
+
+.environmental-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.35px;
+}
+
+.environmental-eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--env-primary);
+  box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.10);
+}
+
+.environmental-page-title.ant-typography {
+  margin: 0 0 7px !important;
+  color: #14243a;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.65px;
+  line-height: 1.25;
+}
+
+.environmental-page-description {
+  display: block;
+  max-width: 720px;
+  color: #718096;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.environmental-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.environmental-location-tag.ant-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* =========================================================
+   SHARED CARDS
+========================================================= */
+
+.environmental-card.ant-card,
+.environmental-metric-card.ant-card {
+  border: 1px solid var(--env-border);
+  border-radius: 12px;
+  background: var(--env-surface);
+  box-shadow: 0 2px 8px rgba(15, 35, 65, 0.035);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.environmental-card.ant-card {
+  margin-bottom: 18px;
+}
+
+.environmental-card.ant-card:hover,
+.environmental-metric-card.ant-card:hover {
+  border-color: #d7e5f8;
+  box-shadow: 0 7px 20px rgba(15, 35, 65, 0.055);
+}
+
+.environmental-card > .ant-card-body,
+.environmental-metric-card > .ant-card-body {
+  padding: 20px;
+}
+
+.environmental-error {
+  margin-bottom: 18px;
+  border-radius: 10px;
+}
+
+/* =========================================================
+   SECTION HEADING
+========================================================= */
+
+.environmental-section-heading,
+.environmental-card-heading,
+.environmental-card-heading-copy {
+  display: flex;
+  align-items: center;
+}
+
+.environmental-section-heading,
+.environmental-card-heading-copy {
+  gap: 12px;
+}
+
+.environmental-card-heading {
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.environmental-section-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: var(--env-primary);
+  font-size: 17px;
+}
+
+.environmental-section-title {
+  display: block;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.environmental-section-description {
+  display: block;
+  margin-top: 3px;
+  color: #8290a4;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   LOCATION SEARCH
+========================================================= */
+
+.environmental-location-card > .ant-card-body {
+  padding: 19px 20px;
+}
+
+.environmental-location-controls {
+  margin-top: 17px;
+  padding-left: 50px;
+}
+
+.environmental-location-select {
+  width: 100%;
+  max-width: 660px;
+}
+
+.environmental-location-select .ant-select-selector {
+  min-height: 42px !important;
+  border-color: #dce4ef !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.environmental-location-select.ant-select-focused .ant-select-selector,
+.environmental-location-select:hover .ant-select-selector {
+  border-color: #91caff !important;
+}
+
+.environmental-location-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 0;
+}
+
+.environmental-location-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.environmental-location-meta .ant-tag {
+  margin-inline-end: 0;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+.environmental-coordinates {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   STATUS / CONNECTION PANEL
+========================================================= */
+
+.environmental-status-card {
+  background:
+    linear-gradient(110deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.environmental-status-card > .ant-card-body {
+  padding: 17px 20px;
+}
+
+.environmental-status-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.environmental-status-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 175px;
+}
+
+.environmental-status-pulse {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: #1677ff;
+  box-shadow: 0 0 0 5px rgba(22, 119, 255, 0.10);
+}
+
+.environmental-status-title,
+.environmental-status-subtitle,
+.environmental-status-label,
+.environmental-status-value {
+  display: block;
+}
+
+.environmental-status-title {
+  color: #24364b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.environmental-status-subtitle {
+  margin-top: 3px;
+  color: #8794a7;
+  font-size: 10px;
+}
+
+.environmental-status-items {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 26px;
+}
+
+.environmental-status-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.environmental-status-indicator {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+}
+
+.environmental-status-indicator.is-online {
+  background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.10);
+}
+
+.environmental-status-indicator.is-offline {
+  background: #dc6b6b;
+  box-shadow: 0 0 0 4px rgba(220, 107, 107, 0.10);
+}
+
+.environmental-status-icon {
+  color: #7b8da5;
+  font-size: 16px;
+}
+
+.environmental-status-label {
+  color: #8794a7;
+  font-size: 10px;
+}
+
+.environmental-status-value {
+  margin-top: 2px;
+  color: #34465d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   CURRENT CONDITIONS HEADING
+========================================================= */
+
+.environmental-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin: 27px 0 15px;
+}
+
+.environmental-section-heading-title.ant-typography {
+  margin: 0 0 4px !important;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.environmental-section-heading-subtitle {
+  color: #8794a7;
+  font-size: 11px;
+}
+
+/* =========================================================
+   METRIC CARDS
+========================================================= */
+
+.environmental-metrics {
+  margin-bottom: 18px;
+}
+
+.environmental-metric-card.ant-card {
+  height: 100%;
+  overflow: hidden;
+}
+
+.environmental-metric-card > .ant-card-body {
+  position: relative;
+  min-height: 157px;
+  padding: 17px 18px 15px;
+}
+
+.environmental-metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.environmental-metric-icon {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 16px;
+}
+
+.environmental-metric-top .ant-tag {
+  margin: 0;
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.environmental-metric-card .ant-statistic-title {
+  margin-bottom: 5px;
+  color: #77869a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.environmental-metric-card .ant-statistic-content {
+  color: #1d2e45;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.7px;
+  line-height: 1.2;
+}
+
+.environmental-metric-card .ant-statistic-content-suffix {
+  margin-left: 4px;
+  color: #718096;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.environmental-metric-caption {
+  display: block;
+  margin-top: 8px;
+  color: #98a3b3;
+  font-size: 10px;
+}
+
+.metric-rainfall .environmental-metric-icon {
+  color: #1677ff;
+  background: #eaf3ff;
+}
+
+.metric-temperature .environmental-metric-icon {
+  color: #e46b35;
+  background: #fff1e9;
+}
+
+.metric-humidity .environmental-metric-icon {
+  color: #0891b2;
+  background: #e6f8fc;
+}
+
+.metric-wind .environmental-metric-icon {
+  color: #7c5bd6;
+  background: #f1edff;
+}
+
+/* =========================================================
+   TABLE CARDS
+========================================================= */
+
+.environmental-table-card > .ant-card-body,
+.environmental-history-card > .ant-card-body {
+  padding: 20px;
+}
+
+.environmental-table .ant-table {
+  color: #34465d;
+  font-size: 12px;
+}
+
+.environmental-table .ant-table-thead > tr > th {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8edf4;
+  background: #f7f9fc;
+  color: #65758b;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.environmental-table .ant-table-tbody > tr > td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 11px;
+}
+
+.environmental-table .ant-table-tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+
+.environmental-table .ant-table-tbody > tr:hover > td {
+  background: #f8fbff !important;
+}
+
+.environmental-table .ant-tag {
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+.environmental-table-footnote {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f5;
+  font-size: 10px;
+}
+
+/* =========================================================
+   HISTORY TOOLBAR
+========================================================= */
+
+.environmental-history-heading {
+  margin-bottom: 19px;
+}
+
+.environmental-history-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 15px;
+  border: 1px solid #edf1f6;
+  border-radius: 9px;
+  background: #f9fbfd;
+}
+
+.environmental-history-filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 13px;
+}
+
+.environmental-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.environmental-filter-label {
+  color: #68788e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.environmental-range-select {
+  width: 155px;
+}
+
+.environmental-range-select .ant-select-selector,
+.environmental-date-picker {
+  min-height: 34px !important;
+  border-color: #dce4ef !important;
+  border-radius: 7px !important;
+  font-size: 11px;
+}
+
+.environmental-export-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.environmental-export-group .ant-btn,
+.environmental-history-filters > .ant-btn {
+  border-radius: 7px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.environmental-filter-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+  padding: 13px 15px;
+  border: 1px solid #e8edf4;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.environmental-filter-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.environmental-summary-label {
+  color: #8a97a8;
+  font-size: 10px;
+}
+
+.environmental-filter-summary .ant-typography-strong {
+  overflow: hidden;
+  color: #34465d;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   PAGE FOOTER
+========================================================= */
+
+.environmental-page-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 5px 0 8px;
+  padding: 15px 17px;
+  border: 1px solid #e8edf4;
+  border-radius: 9px;
+  background: #f9fbfd;
+}
+
+.environmental-footer-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #edf4ff;
+  color: #3478d4;
+  font-size: 14px;
+}
+
+.environmental-footer-title,
+.environmental-footer-description {
+  display: block;
+}
+
+.environmental-footer-title {
+  margin-bottom: 4px;
+  color: #43546a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.environmental-footer-description {
+  max-width: 1000px;
+  color: #8794a7;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1100px) {
+  .environmental-status-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .environmental-status-items {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .environmental-history-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .environmental-export-group {
+    width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .environmental-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .environmental-page-title.ant-typography {
+    font-size: 23px;
+  }
+
+  .environmental-heading-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .environmental-card > .ant-card-body,
+  .environmental-metric-card > .ant-card-body {
+    padding: 15px;
+  }
+
+  .environmental-location-controls {
+    padding-left: 0;
+  }
+
+  .environmental-status-items {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+  }
+
+  .environmental-card-heading {
+    align-items: flex-start;
+  }
+
+  .environmental-history-filters {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .environmental-range-select,
+  .environmental-date-picker {
+    width: 100%;
+  }
+
+  .environmental-filter-group {
+    width: 100%;
+  }
+
+  .environmental-history-filters > .ant-btn {
+    align-self: flex-start;
+  }
+
+  .environmental-filter-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .environmental-eyebrow {
+    font-size: 9px;
+  }
+
+  .environmental-page-description {
+    font-size: 12px;
+  }
+
+  .environmental-heading-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .environmental-status-items {
+    grid-template-columns: 1fr;
+  }
+
+  .environmental-card-heading {
+    flex-direction: column;
+  }
+
+  .environmental-section-header {
+    align-items: flex-start;
+  }
+
+  .environmental-metric-card .ant-statistic-content {
+    font-size: 23px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .environmental-page,
+  .environmental-card,
+  .environmental-metric-card {
+    animation: none;
+    transition: none;
+  }
+}
