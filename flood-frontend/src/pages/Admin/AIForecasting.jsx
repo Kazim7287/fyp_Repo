@@ -49,7 +49,7 @@ import {
   ComposedChart,
 } from "recharts";
 
-import "./AIForecasting.css";
+import "./styles/AIForecasting.css";
 
 const { Title, Text, Paragraph } = Typography;
 
