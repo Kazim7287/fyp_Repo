@@ -39,7 +39,7 @@ import {
 import L from "leaflet";
 
 import "leaflet/dist/leaflet.css";
-import "./FloodMap.css";
+import "./styles/FloodMap.css";
 
 import { getNodes } from "../../api/nodeApi";
 
